@@ -1,4 +1,4 @@
-package com.kircherelectronics.accelerationfilter;
+package com.kircherelectronics.accelerationfilter.plot;
 
 import java.util.LinkedList;
 
@@ -9,6 +9,7 @@ import com.androidplot.xy.SimpleXYSeries;
 import com.androidplot.xy.XYPlot;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.util.Log;
 import android.util.SparseArray;
 
 /*
@@ -30,13 +31,13 @@ import android.util.SparseArray;
  */
 
 /**
- * Acceleration View is responsible for creating and managing all of the View
- * components related to Acceleration.
+ * Dynamic plot is responsible for plotting data on a line graph. It is capable
+ * of dynamically adding and removing plots as required by the user.
  * 
  * @author Kaleb
  * @version %I%, %G%
  */
-public class DynamicPlot
+public class DynamicLinePlot
 {
 	private static final int VERTEX_WIDTH = 2;
 	private static final int LINE_WIDTH = 2;
@@ -57,7 +58,7 @@ public class DynamicPlot
 	 * @param activity
 	 *            the Activity that owns this View.
 	 */
-	public DynamicPlot(XYPlot dynamicPlot)
+	public DynamicLinePlot(XYPlot dynamicPlot)
 	{
 		this.dynamicPlot = dynamicPlot;
 
@@ -155,7 +156,7 @@ public class DynamicPlot
 	/**
 	 * Draw the plot.
 	 */
-	public void draw()
+	public synchronized void draw()
 	{
 		dynamicPlot.redraw();
 	}
@@ -172,8 +173,6 @@ public class DynamicPlot
 	 */
 	public void addSeriesPlot(String seriesName, int key, int color)
 	{
-		int seriesNum = series.size();
-
 		history.append(key, new LinkedList<Number>());
 
 		series.append(key, new SimpleXYSeries(seriesName));
@@ -198,7 +197,7 @@ public class DynamicPlot
 
 		formatter.setVertexPaint(vertexPaint);
 
-		dynamicPlot.addSeries(series.get(seriesNum), formatter);
+		dynamicPlot.addSeries(series.get(key), formatter);
 
 	}
 
@@ -210,7 +209,11 @@ public class DynamicPlot
 	 */
 	public void removeSeriesPlot(int key)
 	{
+		dynamicPlot.removeSeries(series.get(key));
+
+		history.get(key).removeAll(history.get(key));
 		history.remove(key);
+
 		series.remove(key);
 	}
 
@@ -231,6 +234,7 @@ public class DynamicPlot
 		this.dynamicPlot.getRangeLabelWidget().pack();
 		this.dynamicPlot.getLegendWidget().setWidth(0.7f);
 		this.dynamicPlot.setGridPadding(15, 15, 15, 15);
+
 		this.dynamicPlot.getGraphWidget().setGridBackgroundPaint(null);
 		this.dynamicPlot.getGraphWidget().setGridDomainLinePaint(null);
 		this.dynamicPlot.getGraphWidget().setGridRangeLinePaint(null);

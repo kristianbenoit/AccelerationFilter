@@ -1,4 +1,7 @@
-package com.kircherelectronics.accelerationfilter;
+package com.kircherelectronics.accelerationfilter.plot;
+
+import com.kircherelectronics.accelerationfilter.R;
+import com.kircherelectronics.accelerationfilter.R.color;
 
 import android.content.Context;
 

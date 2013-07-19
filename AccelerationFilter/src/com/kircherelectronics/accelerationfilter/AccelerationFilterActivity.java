@@ -15,6 +15,15 @@ import com.androidplot.xy.BarFormatter;
 import com.androidplot.xy.BoundaryMode;
 import com.androidplot.xy.SimpleXYSeries;
 import com.androidplot.xy.XYPlot;
+import com.kircherelectronics.accelerationfilter.dialog.SettingsDialog;
+import com.kircherelectronics.accelerationfilter.filter.LPFAndroidDeveloper;
+import com.kircherelectronics.accelerationfilter.filter.LPFWikipedia;
+import com.kircherelectronics.accelerationfilter.filter.LowPassFilter;
+import com.kircherelectronics.accelerationfilter.filter.MeanFilter;
+import com.kircherelectronics.accelerationfilter.plot.DynamicBarPlot;
+import com.kircherelectronics.accelerationfilter.plot.DynamicLinePlot;
+import com.kircherelectronics.accelerationfilter.plot.PlotColor;
+import com.kircherelectronics.accelerationfilter.statistics.StdDev;
 
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -27,10 +36,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -39,6 +50,7 @@ import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.Window;
 import android.widget.ImageView;
+import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -61,8 +73,35 @@ import android.widget.Toast;
  */
 
 /**
- * Implements an Activity that is intended to run low-pass filters on
- * accelerometer inputs and then graph the outputs.
+ * Implements an Activity that is intended to run filters on accelerometer
+ * inputs and then graph the outputs. The user can select which filters should
+ * be used and set key parameters for each filter.
+ * 
+ * Currently supports two versions of IIR digital low-pass filter. The low-pass
+ * filters are classified as recursive, or infinite response filters (IIR). The
+ * current, nth sample output depends on both current and previous inputs as
+ * well as previous outputs. It is essentially a weighted moving average, which
+ * comes in many different flavors depending on the values for the coefficients,
+ * a and b.
+ * 
+ * The first low-pass filter, the Wikipedia LPF, is an IIR single-pole
+ * implementation. The coefficient, a (alpha), can be adjusted based on the
+ * sample period of the sensor to produce the desired time constant that the
+ * filter will act on. It takes a simple form of y[i] = y[i] + alpha * (x[i] -
+ * y[i]). Alpha is defined as alpha = dt / (timeConstant + dt);) where the time
+ * constant is the length of signals the filter should act on and dt is the
+ * sample period (1/frequency) of the sensor.
+ * 
+ * The second low-pass filter, the Android Developer LPF, is an IIR single-pole
+ * implementation. The coefficient, a (alpha), can be adjusted based on the
+ * sample period of the sensor to produce the desired time constant that the
+ * filter will act on. It is essentially the same as the Wikipedia LPF. It takes
+ * a simple form of y[0] = alpha * y[0] + (1 - alpha) * x[0]. Alpha is defined
+ * as alpha = timeConstant / (timeConstant + dt) where the time constant is the
+ * length of signals the filter should act on and dt is the sample period
+ * (1/frequency) of the sensor.
+ * 
+ * A finite impulse response (FIR) moving average filter is also implemented.
  * 
  * @author Kaleb
  * @version %I%, %G%
@@ -71,25 +110,64 @@ public class AccelerationFilterActivity extends Activity implements
 		SensorEventListener, Runnable, OnTouchListener
 {
 
+	// Only noise below this threshold will be plotted
+	private final static float MAX_NOISE_THRESHOLD = 0.03f;
+
 	// The size of the sample window that determines RMS Amplitude Noise
 	// (standard deviation)
-	private final static int SAMPLE_WINDOW = 50;
+	private static int MEAN_SAMPLE_WINDOW = 20;
+
+	// Plot keys for the acceleration plot
+	private final static int PLOT_ACCEL_X_AXIS_KEY = 0;
+	private final static int PLOT_ACCEL_Y_AXIS_KEY = 1;
+	private final static int PLOT_ACCEL_Z_AXIS_KEY = 2;
+
+	// Plot keys for the LPF Wikipedia plot
+	private final static int PLOT_LPF_WIKI_X_AXIS_KEY = 3;
+	private final static int PLOT_LPF_WIKI_Y_AXIS_KEY = 4;
+	private final static int PLOT_LPF_WIKI_Z_AXIS_KEY = 5;
+
+	// Plot keys for the LPF Android Developer plot
+	private final static int PLOT_LPF_AND_DEV_X_AXIS_KEY = 6;
+	private final static int PLOT_LPF_AND_DEV_Y_AXIS_KEY = 7;
+	private final static int PLOT_LPF_AND_DEV_Z_AXIS_KEY = 8;
+
+	// Plot keys for the mean filter plot
+	private final static int PLOT_MEAN_X_AXIS_KEY = 9;
+	private final static int PLOT_MEAN_Y_AXIS_KEY = 10;
+	private final static int PLOT_MEAN_Z_AXIS_KEY = 11;
+
+	// Plot keys for the noise bar plot
+	private final static int BAR_PLOT_ACCEL_KEY = 0;
+	private final static int BAR_PLOT_LPF_WIKI_KEY = 1;
+	private final static int BAR_PLOT_LPF_AND_DEV_KEY = 2;
+	private final static int BAR_PLOT_MEAN_KEY = 3;
 
 	// Indicate if the output should be logged to a .csv file
 	private boolean logData = false;
 
-	// Indicate if a static alpha should be used for the LPF Wikipedia
-	private boolean staticWikiAlpha = false;
+	// Indicate if the AndDev LPF should be plotted
+	private boolean plotLPFAndDev = false;
 
-	// Indicate if a static alpha should be used for the LPF Android Developer
-	private boolean staticAndDevAlpha = false;
+	// Indicate if the Wiki LPF should be plotted
+	private boolean plotLPFWiki = false;
+
+	// Indicate if the Mean Filter should be plotted
+	private boolean plotMeanFilter = false;
+
+	// Indicate the plots are ready to accept inputs
+	private boolean plotLPFWikiReady = false;
+	private boolean plotLPFAndDevReady = false;
+	private boolean plotMeanReady = false;
 
 	// Decimal formats for the UI outputs
 	private DecimalFormat df;
-	private DecimalFormat dfLong;
 
+	private SettingsDialog settingsDialog;
+
+	private DynamicBarPlot barPlot;
 	// Graph plot for the UI outputs
-	private DynamicPlot dynamicPlot;
+	private DynamicLinePlot dynamicPlot;
 
 	// The static alpha for the LPF Wikipedia
 	private float wikiAlpha;
@@ -104,6 +182,7 @@ public class AccelerationFilterActivity extends Activity implements
 	private float[] acceleration = new float[3];
 	private float[] lpfWikiOutput = new float[3];
 	private float[] lpfAndDevOutput = new float[3];
+	private float[] meanFilterOutput = new float[3];
 
 	// Handler for the UI plots so everything plots smoothly
 	private Handler handler;
@@ -113,21 +192,6 @@ public class AccelerationFilterActivity extends Activity implements
 
 	// The generation of the log output
 	private int generation = 0;
-
-	// Plot keys for the acceleration plot
-	private int plotAccelXAxisKey = 0;
-	private int plotAccelYAxisKey = 1;
-	private int plotAccelZAxisKey = 2;
-
-	// Plot keys for the LPF Wikipedia plot
-	private int plotLPFWikiXAxisKey = 3;
-	private int plotLPFWikiYAxisKey = 4;
-	private int plotLPFWikiZAxisKey = 5;
-
-	// Plot keys for the LPF Android Developer plot
-	private int plotLPFAndDevXAxisKey = 6;
-	private int plotLPFAndDevYAxisKey = 7;
-	private int plotLPFAndDevZAxisKey = 8;
 
 	// Color keys for the acceleration plot
 	private int plotAccelXAxisColor;
@@ -144,6 +208,11 @@ public class AccelerationFilterActivity extends Activity implements
 	private int plotLPFAndDevYAxisColor;
 	private int plotLPFAndDevZAxisColor;
 
+	// Color keys for the mean filter plot
+	private int plotMeanXAxisColor;
+	private int plotMeanYAxisColor;
+	private int plotMeanZAxisColor;
+
 	// Log output time stamp
 	private long logTime = 0;
 
@@ -151,19 +220,19 @@ public class AccelerationFilterActivity extends Activity implements
 	private LowPassFilter lpfWiki;
 	private LowPassFilter lpfAndDev;
 
+	private MeanFilter meanFilter;
+
 	// Plot colors
 	private PlotColor color;
 
 	// Sensor manager to access the accelerometer sensor
 	private SensorManager sensorManager;
 
-	// RMS Noise levels bar chart series
-	private SimpleXYSeries noiseLevelsSeries = null;
-
 	// RMS Noise levels
 	private StdDev varianceAccel;
 	private StdDev varianceLPFWiki;
 	private StdDev varianceLPFAndDev;
+	private StdDev varianceMean;
 
 	// Acceleration plot titles
 	private String plotAccelXAxisTitle = "AX";
@@ -180,6 +249,11 @@ public class AccelerationFilterActivity extends Activity implements
 	private String plotLPFAndDevYAxisTitle = "ADY";
 	private String plotLPFAndDevZAxisTitle = "ADZ";
 
+	// Mean filter plot tiltes
+	private String plotMeanXAxisTitle = "MX";
+	private String plotMeanYAxisTitle = "MY";
+	private String plotMeanZAxisTitle = "MZ";
+
 	// Output log
 	private String log;
 
@@ -188,14 +262,6 @@ public class AccelerationFilterActivity extends Activity implements
 	private TextView yAxis;
 	private TextView zAxis;
 
-	// RMS Noise UI outputs
-	private TextView rmsAccel;
-	private TextView rmsLPFWiki;
-	private TextView rmsLPFAndDev;
-
-	// RMS Noise levels bar chart
-	private XYPlot noiseLevelsPlot = null;
-
 	/**
 	 * Get the sample window size for the standard deviation.
 	 * 
@@ -203,7 +269,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	public static int getSampleWindow()
 	{
-		return SAMPLE_WINDOW;
+		return MEAN_SAMPLE_WINDOW;
 	}
 
 	@Override
@@ -216,58 +282,20 @@ public class AccelerationFilterActivity extends Activity implements
 		// Read in the saved prefs
 		readPrefs();
 
-		View view = findViewById(R.id.ScrollView01);
-		view.setOnTouchListener(this);
+		initTextOutputs();
 
-		// Create the graph plot
-		XYPlot plot = (XYPlot) findViewById(R.id.plot_sensor);
-		plot.setTitle("Acceleration");
-		dynamicPlot = new DynamicPlot(plot);
-		dynamicPlot.setMaxRange(1.2);
-		dynamicPlot.setMinRange(-1.2);
+		initIcons();
 
-		// Create the acceleration UI outputs
-		xAxis = (TextView) findViewById(R.id.value_x_axis);
-		yAxis = (TextView) findViewById(R.id.value_y_axis);
-		zAxis = (TextView) findViewById(R.id.value_z_axis);
+		initStatistics();
 
-		// Create the RMS Noise UI outputs
-		rmsAccel = (TextView) findViewById(R.id.value_rms_acceleration);
-		rmsLPFWiki = (TextView) findViewById(R.id.value_rms_lpf_wiki);
-		rmsLPFAndDev = (TextView) findViewById(R.id.value_rms_lpf_and_dev);
+		initFilters();
 
-		// Create the logger icon
-		iconLogger = (ImageView) findViewById(R.id.icon_logger);
-		iconLogger.setVisibility(View.INVISIBLE);
+		initColor();
 
-		// Format the UI outputs so they look nice
-		df = new DecimalFormat("#.##");
-		dfLong = new DecimalFormat("#.####");
+		initPlots();
 
-		// Create the RMS Noise calculations
-		varianceAccel = new StdDev();
-		varianceLPFWiki = new StdDev();
-		varianceLPFAndDev = new StdDev();
-
-		// Get the sensor manager ready
 		sensorManager = (SensorManager) this
 				.getSystemService(Context.SENSOR_SERVICE);
-
-		// Create the low-pass filters
-		lpfWiki = new LPFWikipedia();
-		lpfAndDev = new LPFAndroidDeveloper();
-
-		// Initialize the low-pass filters with the saved prefs
-		lpfWiki.setAlphaStatic(staticWikiAlpha);
-		lpfWiki.setAlpha(wikiAlpha);
-
-		lpfAndDev.setAlphaStatic(staticAndDevAlpha);
-		lpfAndDev.setAlpha(andDevAlpha);
-
-		// Initialize the plots
-		initColor();
-		initAccelerationPlot();
-		initNoisePlot();
 
 		handler = new Handler();
 	}
@@ -319,8 +347,18 @@ public class AccelerationFilterActivity extends Activity implements
 		acceleration[1] = acceleration[1] / SensorManager.GRAVITY_EARTH;
 		acceleration[2] = acceleration[2] / SensorManager.GRAVITY_EARTH;
 
-		lpfWikiOutput = lpfWiki.addSamples(acceleration);
-		lpfAndDevOutput = lpfAndDev.addSamples(acceleration);
+		if (plotLPFWiki)
+		{
+			lpfWikiOutput = lpfWiki.addSamples(acceleration);
+		}
+		if (plotLPFAndDev)
+		{
+			lpfAndDevOutput = lpfAndDev.addSamples(acceleration);
+		}
+		if (plotMeanFilter)
+		{
+			meanFilterOutput = meanFilter.filterFloat(acceleration);
+		}
 	}
 
 	@Override
@@ -349,6 +387,11 @@ public class AccelerationFilterActivity extends Activity implements
 			// Log the data
 		case R.id.menu_settings_filter:
 			showSettingsDialog();
+			return true;
+
+			// Log the data
+		case R.id.menu_settings_help:
+			showHelpDialog();
 			return true;
 
 		default:
@@ -407,15 +450,158 @@ public class AccelerationFilterActivity extends Activity implements
 	}
 
 	/**
-	 * Show a settings dialog.
+	 * Indicate if the Wikipedia LPF should be plotted.
+	 * 
+	 * @param plotLPFWiki
+	 *            Plot the filter if true.
 	 */
-	private void showSettingsDialog()
+	public void setPlotLPFWiki(boolean plotLPFWiki)
 	{
-		SettingsDialog dialog = new SettingsDialog(this, lpfWiki, lpfAndDev);
-		dialog.setCancelable(true);
-		dialog.setCanceledOnTouchOutside(true);
+		this.plotLPFWiki = plotLPFWiki;
 
-		dialog.show();
+		if (this.plotLPFWiki)
+		{
+			addLPFWikiPlot();
+		}
+		else
+		{
+			removeLPFWikiPlot();
+		}
+	}
+
+	/**
+	 * Indicate if the Android Developer LPF should be plotted.
+	 * 
+	 * @param plotLPFAndDev
+	 *            Plot the filter if true.
+	 */
+	public void setPlotLPFAndDev(boolean plotLPFAndDev)
+	{
+		this.plotLPFAndDev = plotLPFAndDev;
+
+		if (this.plotLPFAndDev)
+		{
+			addLPFAndDevPlot();
+		}
+		else
+		{
+			removeLPFAndDevPlot();
+		}
+	}
+
+	/**
+	 * Indicate if the Mean Filter should be plotted.
+	 * 
+	 * @param plotMean
+	 *            Plot the filter if true.
+	 */
+	public void setPlotMean(boolean plotMean)
+	{
+		this.plotMeanFilter = plotMean;
+
+		if (this.plotMeanFilter)
+		{
+			addMeanFilterPlot();
+		}
+		else
+		{
+			removeMeanFilterPlot();
+		}
+	}
+
+	/**
+	 * Create the output graph line chart.
+	 */
+	private void addAccelerationPlot()
+	{
+		addGraphPlot(plotAccelXAxisTitle, PLOT_ACCEL_X_AXIS_KEY,
+				plotAccelXAxisColor);
+		addGraphPlot(plotAccelYAxisTitle, PLOT_ACCEL_Y_AXIS_KEY,
+				plotAccelYAxisColor);
+		addGraphPlot(plotAccelZAxisTitle, PLOT_ACCEL_Z_AXIS_KEY,
+				plotAccelZAxisColor);
+	}
+
+	/**
+	 * Add a plot to the graph.
+	 * 
+	 * @param title
+	 *            The name of the plot.
+	 * @param key
+	 *            The unique plot key
+	 * @param color
+	 *            The color of the plot
+	 */
+	private void addGraphPlot(String title, int key, int color)
+	{
+		dynamicPlot.addSeriesPlot(title, key, color);
+	}
+
+	/**
+	 * Add the Android Developer LPF plot.
+	 */
+	private void addLPFAndDevPlot()
+	{
+		if (plotLPFAndDev)
+		{
+			addGraphPlot(plotLPFAndDevXAxisTitle, PLOT_LPF_AND_DEV_X_AXIS_KEY,
+					plotLPFAndDevXAxisColor);
+			addGraphPlot(plotLPFAndDevYAxisTitle, PLOT_LPF_AND_DEV_Y_AXIS_KEY,
+					plotLPFAndDevYAxisColor);
+			addGraphPlot(plotLPFAndDevZAxisTitle, PLOT_LPF_AND_DEV_Z_AXIS_KEY,
+					plotLPFAndDevZAxisColor);
+
+			plotLPFAndDevReady = true;
+		}
+	}
+
+	/**
+	 * Add the Wikipedia LPF plot.
+	 */
+	private void addLPFWikiPlot()
+	{
+		if (plotLPFWiki)
+		{
+			addGraphPlot(plotLPFWikiXAxisTitle, PLOT_LPF_WIKI_X_AXIS_KEY,
+					plotLPFWikiXAxisColor);
+			addGraphPlot(plotLPFWikiYAxisTitle, PLOT_LPF_WIKI_Y_AXIS_KEY,
+					plotLPFWikiYAxisColor);
+			addGraphPlot(plotLPFWikiZAxisTitle, PLOT_LPF_WIKI_Z_AXIS_KEY,
+					plotLPFWikiZAxisColor);
+
+			plotLPFWikiReady = true;
+		}
+	}
+
+	/**
+	 * Add the Mean Filter plot.
+	 */
+	private void addMeanFilterPlot()
+	{
+		if (plotMeanFilter)
+		{
+			addGraphPlot(plotMeanXAxisTitle, PLOT_MEAN_X_AXIS_KEY,
+					plotMeanXAxisColor);
+			addGraphPlot(plotMeanYAxisTitle, PLOT_MEAN_Y_AXIS_KEY,
+					plotMeanYAxisColor);
+			addGraphPlot(plotMeanZAxisTitle, PLOT_MEAN_Z_AXIS_KEY,
+					plotMeanZAxisColor);
+
+			plotMeanReady = true;
+		}
+	}
+
+	/**
+	 * Get the distance between fingers for the touch to zoom.
+	 * 
+	 * @param event
+	 * @return
+	 */
+	private final float fingerDist(MotionEvent event)
+	{
+		float x = event.getX(0) - event.getX(1);
+		float y = event.getY(0) - event.getY(1);
+		return (float) Math.sqrt(x * x + y * y);
 	}
 
 	/**
@@ -436,112 +622,151 @@ public class AccelerationFilterActivity extends Activity implements
 		plotLPFAndDevXAxisColor = color.getLightBlue();
 		plotLPFAndDevYAxisColor = color.getLightGreen();
 		plotLPFAndDevZAxisColor = color.getLightRed();
+
+		plotMeanXAxisColor = color.getLightBlue();
+		plotMeanYAxisColor = color.getLightGreen();
+		plotMeanZAxisColor = color.getLightRed();
 	}
 
 	/**
-	 * Create the output graph line chart.
+	 * Initialize the activity icons.
 	 */
-	private void initAccelerationPlot()
+	private void initIcons()
 	{
-		addPlot(plotAccelXAxisTitle, plotAccelXAxisKey, plotAccelXAxisColor);
-		addPlot(plotAccelYAxisTitle, plotAccelYAxisKey, plotAccelYAxisColor);
-		addPlot(plotAccelZAxisTitle, plotAccelZAxisKey, plotAccelZAxisColor);
-
-		addPlot(plotLPFWikiXAxisTitle, plotLPFWikiXAxisKey,
-				plotLPFWikiXAxisColor);
-		addPlot(plotLPFWikiYAxisTitle, plotLPFWikiYAxisKey,
-				plotLPFWikiYAxisColor);
-		addPlot(plotLPFWikiZAxisTitle, plotLPFWikiZAxisKey,
-				plotLPFWikiZAxisColor);
-
-		addPlot(plotLPFAndDevXAxisTitle, plotLPFAndDevXAxisKey,
-				plotLPFAndDevXAxisColor);
-		addPlot(plotLPFAndDevYAxisTitle, plotLPFAndDevYAxisKey,
-				plotLPFAndDevYAxisColor);
-		addPlot(plotLPFAndDevZAxisTitle, plotLPFAndDevZAxisKey,
-				plotLPFAndDevZAxisColor);
+		// Create the logger icon
+		iconLogger = (ImageView) findViewById(R.id.icon_logger);
+		iconLogger.setVisibility(View.INVISIBLE);
 	}
 
 	/**
-	 * Create the RMS Noise bar chart.
+	 * Initialize the available filters.
 	 */
-	private void initNoisePlot()
+	private void initFilters()
 	{
+		// Create the low-pass filters
+		lpfWiki = new LPFWikipedia();
+		lpfAndDev = new LPFAndroidDeveloper();
+		meanFilter = new MeanFilter();
+
+		meanFilter.setWindowSize(MEAN_SAMPLE_WINDOW);
+
+		// Initialize the low-pass filters with the saved prefs
+		lpfWiki.setAlphaStatic(plotLPFAndDev);
+		lpfWiki.setAlpha(wikiAlpha);
+
+		lpfAndDev.setAlphaStatic(plotLPFWiki);
+		lpfAndDev.setAlpha(andDevAlpha);
+
+	}
+
+	/**
+	 * Initialize the plots.
+	 */
+	private void initPlots()
+	{
+		View view = findViewById(R.id.ScrollView01);
+		view.setOnTouchListener(this);
+
+		// Create the graph plot
+		XYPlot plot = (XYPlot) findViewById(R.id.plot_sensor);
+		plot.setTitle("Acceleration");
+		dynamicPlot = new DynamicLinePlot(plot);
+		dynamicPlot.setMaxRange(1.2);
+		dynamicPlot.setMinRange(-1.2);
+
 		// setup the APR Levels plot:
-		noiseLevelsPlot = (XYPlot) findViewById(R.id.plot_noise);
+		XYPlot noiseLevelsPlot = (XYPlot) findViewById(R.id.plot_noise);
 		noiseLevelsPlot.setTitle("Noise");
 
-		noiseLevelsSeries = new SimpleXYSeries("Noise Levels");
-		noiseLevelsSeries.useImplicitXVals();
-		BarFormatter bf = new BarFormatter(Color.rgb(0, 153, 204), Color.rgb(0,
-				153, 204));
+		barPlot = new DynamicBarPlot(noiseLevelsPlot, "Sensor Noise");
 
-		Paint fillPaint = new Paint();
-		fillPaint.setAntiAlias(true);
-		fillPaint.setStyle(Paint.Style.STROKE);
-		fillPaint.setColor(Color.rgb(0, 153, 204));
-		fillPaint.setStrokeWidth(20);
-
-		bf.setFillPaint(fillPaint);
-
-		noiseLevelsPlot.addSeries(noiseLevelsSeries, bf);
-
-		noiseLevelsPlot.setDomainStepValue(3);
-		noiseLevelsPlot.setTicksPerRangeLabel(3);
-		noiseLevelsPlot.setRangeStepValue(1);
-
-		// per the android documentation, the minimum and maximum readings we
-		// can get from
-		// any of the orientation sensors is -180 and 359 respectively so we
-		// will fix our plot's
-		// boundaries to those values. If we did not do this, the plot would
-		// auto-range which
-		// can be visually confusing in the case of dynamic plots.
-		noiseLevelsPlot.setRangeBoundaries(0, 0.1, BoundaryMode.FIXED);
-
-		// use our custom domain value formatter:
-		noiseLevelsPlot.setDomainValueFormat(new NoiseIndexFormat());
-
-		// update our domain and range axis labels:
-		noiseLevelsPlot.setDomainLabel("Output");
-		noiseLevelsPlot.getDomainLabelWidget().pack();
-		noiseLevelsPlot.setRangeLabel("RMS Amplitude");
-		noiseLevelsPlot.getRangeLabelWidget().pack();
-		noiseLevelsPlot.setGridPadding(45, 0, 45, 0);
-
-		noiseLevelsPlot.setGridPadding(15, 15, 15, 15);
-		noiseLevelsPlot.getGraphWidget().setGridBackgroundPaint(null);
-		noiseLevelsPlot.getGraphWidget().setGridDomainLinePaint(null);
-		noiseLevelsPlot.getGraphWidget().setGridRangeLinePaint(null);
-		noiseLevelsPlot.getGraphWidget().setBackgroundPaint(null);
-		noiseLevelsPlot.getGraphWidget().setBorderPaint(null);
-
-		Paint paint = new Paint();
-
-		paint.setStyle(Paint.Style.FILL_AND_STROKE);
-		paint.setColor(Color.rgb(119, 119, 119));
-		paint.setStrokeWidth(2);
-
-		noiseLevelsPlot.getGraphWidget().setDomainOriginLinePaint(null);
-		noiseLevelsPlot.getGraphWidget().setRangeOriginLinePaint(paint);
-
-		noiseLevelsPlot.setBorderPaint(null);
-		noiseLevelsPlot.setBackgroundPaint(null);
+		addAccelerationPlot();
+		addLPFAndDevPlot();
+		addLPFWikiPlot();
+		addMeanFilterPlot();
 	}
 
 	/**
-	 * Add a plot to the graph.
-	 * 
-	 * @param title
-	 *            The name of the plot.
-	 * @param key
-	 *            The unique plot key
-	 * @param color
-	 *            The color of the plot
+	 * Initialize the statistics.
 	 */
-	private void addPlot(String title, int key, int color)
+	private void initStatistics()
 	{
-		dynamicPlot.addSeriesPlot(title, key, color);
+		// Create the RMS Noise calculations
+		varianceAccel = new StdDev();
+		varianceLPFWiki = new StdDev();
+		varianceLPFAndDev = new StdDev();
+		varianceMean = new StdDev();
+	}
+
+	/**
+	 * Initialize the Text View sensor outputs.
+	 */
+	private void initTextOutputs()
+	{
+		// Format the UI outputs so they look nice
+		df = new DecimalFormat("#.##");
+
+		// Create the acceleration UI outputs
+		xAxis = (TextView) findViewById(R.id.value_x_axis);
+		yAxis = (TextView) findViewById(R.id.value_y_axis);
+		zAxis = (TextView) findViewById(R.id.value_z_axis);
+	}
+
+	/**
+	 * Plot the output data in the UI.
+	 */
+	private void plotData()
+	{
+		updateGraphPlot();
+
+		updateAccelerationText();
+
+		updateBarPlot();
+	}
+
+	/**
+	 * Remove the Mean Filter plot.
+	 */
+	private void removeMeanFilterPlot()
+	{
+		if (!plotMeanFilter)
+		{
+			plotMeanReady = false;
+
+			removeGraphPlot(PLOT_MEAN_X_AXIS_KEY);
+			removeGraphPlot(PLOT_MEAN_Y_AXIS_KEY);
+			removeGraphPlot(PLOT_MEAN_Z_AXIS_KEY);
+		}
+	}
+
+	/**
+	 * Remove the Android Developer LPF plot.
+	 */
+	private void removeLPFAndDevPlot()
+	{
+		if (!plotLPFAndDev)
+		{
+			plotLPFAndDevReady = false;
+
+			removeGraphPlot(PLOT_LPF_AND_DEV_X_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_AND_DEV_Y_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_AND_DEV_Z_AXIS_KEY);
+		}
+	}
+
+	/**
+	 * Remove the Wikipedia LPF plot.
+	 */
+	private void removeLPFWikiPlot()
+	{
+		if (!plotLPFWiki)
+		{
+			plotLPFWikiReady = false;
+
+			removeGraphPlot(PLOT_LPF_WIKI_X_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_WIKI_Y_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_WIKI_Z_AXIS_KEY);
+		}
 	}
 
 	/**
@@ -549,9 +774,39 @@ public class AccelerationFilterActivity extends Activity implements
 	 * 
 	 * @param key
 	 */
-	private void removePlot(int key)
+	private void removeGraphPlot(int key)
 	{
 		dynamicPlot.removeSeriesPlot(key);
+	}
+
+	private void showHelpDialog()
+	{
+		Dialog helpDialog = new Dialog(this);
+		helpDialog.setCancelable(true);
+		helpDialog.setCanceledOnTouchOutside(true);
+		
+		helpDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help,
+				null));
+
+		helpDialog.show();
+	}
+
+	/**
+	 * Show a settings dialog.
+	 */
+	private void showSettingsDialog()
+	{
+		if (settingsDialog == null)
+		{
+			settingsDialog = new SettingsDialog(this, lpfWiki, lpfAndDev,
+					meanFilter);
+			settingsDialog.setCancelable(true);
+			settingsDialog.setCanceledOnTouchOutside(true);
+		}
+
+		settingsDialog.show();
 	}
 
 	/**
@@ -589,6 +844,12 @@ public class AccelerationFilterActivity extends Activity implements
 
 			headers += this.plotLPFAndDevZAxisTitle + ",";
 
+			headers += this.plotMeanXAxisTitle + ",";
+
+			headers += this.plotMeanYAxisTitle + ",";
+
+			headers += this.plotMeanZAxisTitle + ",";
+
 			log = headers + "\n";
 
 			iconLogger.setVisibility(View.VISIBLE);
@@ -602,66 +863,6 @@ public class AccelerationFilterActivity extends Activity implements
 			logData = false;
 			writeLogToFile();
 		}
-	}
-
-	/**
-	 * Plot the output data in the UI.
-	 */
-	private void plotData()
-	{
-		dynamicPlot.setData(acceleration[0], plotAccelXAxisKey);
-		dynamicPlot.setData(acceleration[1], plotAccelYAxisKey);
-		dynamicPlot.setData(acceleration[2], plotAccelZAxisKey);
-
-		dynamicPlot.setData(lpfWikiOutput[0], plotLPFWikiXAxisKey);
-		dynamicPlot.setData(lpfWikiOutput[1], plotLPFWikiYAxisKey);
-		dynamicPlot.setData(lpfWikiOutput[2], plotLPFWikiZAxisKey);
-
-		dynamicPlot.setData(lpfAndDevOutput[0], plotLPFAndDevXAxisKey);
-		dynamicPlot.setData(lpfAndDevOutput[1], plotLPFAndDevYAxisKey);
-		dynamicPlot.setData(lpfAndDevOutput[2], plotLPFAndDevZAxisKey);
-
-		dynamicPlot.draw();
-
-		// Update the view with the new acceleration data
-		xAxis.setText(df.format(acceleration[0]));
-		yAxis.setText(df.format(acceleration[1]));
-		zAxis.setText(df.format(acceleration[2]));
-
-		// Update the view with the new acceleration data
-
-		Number[] series1Numbers =
-		{
-				varianceAccel
-						.addSample(Math.abs(acceleration[0])
-								+ Math.abs(acceleration[1])
-								+ Math.abs(acceleration[2])),
-				varianceLPFWiki.addSample(Math.abs(lpfWikiOutput[0])
-						+ Math.abs(lpfWikiOutput[1])
-						+ Math.abs(lpfWikiOutput[2])),
-				varianceLPFAndDev.addSample(Math.abs(lpfAndDevOutput[0])
-						+ Math.abs(lpfAndDevOutput[1])
-						+ Math.abs(lpfAndDevOutput[2])) };
-		noiseLevelsSeries.setModel(Arrays.asList(series1Numbers),
-				SimpleXYSeries.ArrayFormat.Y_VALS_ONLY);
-
-		noiseLevelsPlot.redraw();
-
-		rmsAccel.setText(dfLong.format(varianceAccel.addSample(Math
-				.abs(acceleration[0])
-				+ Math.abs(acceleration[1])
-				+ Math.abs(acceleration[2]))));
-
-		rmsLPFWiki.setText(dfLong.format(varianceLPFWiki.addSample(Math
-				.abs(lpfWikiOutput[0])
-				+ Math.abs(lpfWikiOutput[1])
-				+ Math.abs(lpfWikiOutput[2]))));
-
-		rmsLPFAndDev.setText(dfLong.format(varianceLPFAndDev.addSample(Math
-				.abs(lpfAndDevOutput[0])
-				+ Math.abs(lpfAndDevOutput[1])
-				+ Math.abs(lpfAndDevOutput[2]))));
-
 	}
 
 	/**
@@ -691,6 +892,10 @@ public class AccelerationFilterActivity extends Activity implements
 			log += lpfAndDevOutput[0] + ",";
 			log += lpfAndDevOutput[1] + ",";
 			log += lpfAndDevOutput[2] + ",";
+
+			log += meanFilterOutput[0] + ",";
+			log += meanFilterOutput[1] + ",";
+			log += meanFilterOutput[2] + ",";
 		}
 	}
 
@@ -752,19 +957,6 @@ public class AccelerationFilterActivity extends Activity implements
 	}
 
 	/**
-	 * Get the distance between fingers for the touch to zoom.
-	 * 
-	 * @param event
-	 * @return
-	 */
-	private final float fingerDist(MotionEvent event)
-	{
-		float x = event.getX(0) - event.getX(1);
-		float y = event.getY(0) - event.getY(1);
-		return (float) Math.sqrt(x * x + y * y);
-	}
-
-	/**
 	 * Read in the current user preferences.
 	 */
 	private void readPrefs()
@@ -772,51 +964,134 @@ public class AccelerationFilterActivity extends Activity implements
 		SharedPreferences prefs = this.getSharedPreferences("lpf_prefs",
 				Activity.MODE_PRIVATE);
 
-		this.staticWikiAlpha = prefs.getBoolean("show_alpha_wiki", false);
-		this.staticAndDevAlpha = prefs.getBoolean("show_alpha_and_dev", false);
+		this.plotLPFAndDev = prefs.getBoolean("plot_lpf_and_dev", false);
+		this.plotLPFWiki = prefs.getBoolean("plot_lpf_wiki", false);
+		this.plotMeanFilter = prefs.getBoolean("plot_mean", false);
 
-		this.wikiAlpha = prefs.getFloat("wiki_alpha", 0.1f);
-		this.andDevAlpha = prefs.getFloat("and_dev_alpha", 0.1f);
-
+		this.wikiAlpha = prefs.getFloat("lpf_wiki_alpha", 0.1f);
+		this.andDevAlpha = prefs.getFloat("lpf_and_dev_alpha", 0.9f);
+		MEAN_SAMPLE_WINDOW = prefs.getInt("window_mean", 50);
 	}
 
 	/**
-	 * A simple formatter to convert bar indexes into sensor names.
+	 * Update the acceleration sensor output Text Views.
 	 */
-	private class NoiseIndexFormat extends Format
+	private void updateAccelerationText()
 	{
+		// Update the view with the new acceleration data
+		xAxis.setText(df.format(acceleration[0]));
+		yAxis.setText(df.format(acceleration[1]));
+		zAxis.setText(df.format(acceleration[2]));
+	}
 
-		@Override
-		public StringBuffer format(Object obj, StringBuffer toAppendTo,
-				FieldPosition pos)
+	/**
+	 * Update the graph plot.
+	 */
+	private void updateGraphPlot()
+	{
+		dynamicPlot.setData(acceleration[0], PLOT_ACCEL_X_AXIS_KEY);
+		dynamicPlot.setData(acceleration[1], PLOT_ACCEL_Y_AXIS_KEY);
+		dynamicPlot.setData(acceleration[2], PLOT_ACCEL_Z_AXIS_KEY);
+
+		if (plotLPFWiki)
 		{
-			Number num = (Number) obj;
+			dynamicPlot.setData(lpfWikiOutput[0], PLOT_LPF_WIKI_X_AXIS_KEY);
+			dynamicPlot.setData(lpfWikiOutput[1], PLOT_LPF_WIKI_Y_AXIS_KEY);
+			dynamicPlot.setData(lpfWikiOutput[2], PLOT_LPF_WIKI_Z_AXIS_KEY);
+		}
 
-			// using num.intValue() will floor the value, so we add 0.5 to round
-			// instead:
-			int roundNum = (int) (num.floatValue() + 0.5f);
-			switch (roundNum)
+		if (plotLPFAndDev)
+		{
+			dynamicPlot
+					.setData(lpfAndDevOutput[0], PLOT_LPF_AND_DEV_X_AXIS_KEY);
+			dynamicPlot
+					.setData(lpfAndDevOutput[1], PLOT_LPF_AND_DEV_Y_AXIS_KEY);
+			dynamicPlot
+					.setData(lpfAndDevOutput[2], PLOT_LPF_AND_DEV_Z_AXIS_KEY);
+		}
+
+		if (plotMeanFilter)
+		{
+			dynamicPlot.setData(meanFilterOutput[0], PLOT_MEAN_X_AXIS_KEY);
+			dynamicPlot.setData(meanFilterOutput[1], PLOT_MEAN_Y_AXIS_KEY);
+			dynamicPlot.setData(meanFilterOutput[2], PLOT_MEAN_Z_AXIS_KEY);
+		}
+
+		dynamicPlot.draw();
+	}
+
+	/**
+	 * Update the bar plot.
+	 */
+	private void updateBarPlot()
+	{
+		Number[] seriesNumbers = new Number[4];
+
+		double var = varianceAccel.addSample(Math.abs(acceleration[0])
+				+ Math.abs(acceleration[1]) + Math.abs(acceleration[2]));
+
+		if (var > MAX_NOISE_THRESHOLD)
+		{
+			var = MAX_NOISE_THRESHOLD;
+		}
+
+		seriesNumbers[BAR_PLOT_ACCEL_KEY] = var;
+
+		if (plotLPFAndDevReady)
+		{
+
+			var = varianceLPFAndDev.addSample(Math.abs(lpfAndDevOutput[0])
+					+ Math.abs(lpfAndDevOutput[1])
+					+ Math.abs(lpfAndDevOutput[2]));
+
+			if (var > MAX_NOISE_THRESHOLD)
 			{
-			case 0:
-				toAppendTo.append("Accel");
-				break;
-			case 1:
-				toAppendTo.append("LPFWiki");
-				break;
-			case 2:
-				toAppendTo.append("LPFAndDev");
-				break;
-			default:
-				toAppendTo.append("Unknown");
+				var = MAX_NOISE_THRESHOLD;
 			}
-			return toAppendTo;
+
+			seriesNumbers[BAR_PLOT_LPF_AND_DEV_KEY] = var;
+		}
+		if (!plotLPFAndDevReady)
+		{
+			seriesNumbers[BAR_PLOT_LPF_AND_DEV_KEY] = 0;
 		}
 
-		@Override
-		public Object parseObject(String string, ParsePosition position)
+		if (plotLPFWikiReady)
 		{
-			// TODO Auto-generated method stub
-			return null;
+			var = varianceLPFWiki.addSample(Math.abs(lpfWikiOutput[0])
+					+ Math.abs(lpfWikiOutput[1]) + Math.abs(lpfWikiOutput[2]));
+
+			if (var > MAX_NOISE_THRESHOLD)
+			{
+				var = MAX_NOISE_THRESHOLD;
+			}
+
+			seriesNumbers[BAR_PLOT_LPF_WIKI_KEY] = var;
 		}
+		if (!plotLPFWikiReady)
+		{
+			seriesNumbers[BAR_PLOT_LPF_WIKI_KEY] = 0;
+		}
+
+		if (plotMeanReady)
+		{
+			var = varianceMean.addSample(Math.abs(meanFilterOutput[0])
+					+ Math.abs(meanFilterOutput[1])
+					+ Math.abs(meanFilterOutput[2]));
+
+			if (var > MAX_NOISE_THRESHOLD)
+			{
+				var = MAX_NOISE_THRESHOLD;
+			}
+
+			seriesNumbers[BAR_PLOT_MEAN_KEY] = var;
+		}
+
+		if (!plotMeanReady)
+		{
+			seriesNumbers[BAR_PLOT_MEAN_KEY] = 0;
+		}
+
+		barPlot.onDataAvailable(seriesNumbers);
 	}
 }

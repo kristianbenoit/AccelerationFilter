@@ -3,7 +3,7 @@
 
     <item
         android:id="@+id/menu_settings"
-        android:showAsAction="always|withText"
+        android:showAsAction="always"
         android:title="@string/action_settings">
         <menu>
             <item
@@ -13,6 +13,10 @@
             <item
                 android:id="@+id/menu_settings_filter"
                 android:title="@string/filter_settings"/>
+            
+              <item
+                android:id="@+id/menu_settings_help"
+                android:title="@string/filter_help"/>
         </menu>
     </item>
 

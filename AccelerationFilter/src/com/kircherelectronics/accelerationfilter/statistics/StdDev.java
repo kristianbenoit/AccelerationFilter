@@ -1,4 +1,4 @@
-package com.kircherelectronics.accelerationfilter;
+package com.kircherelectronics.accelerationfilter.statistics;
 
 /*
  * Acceleration Explorer
@@ -22,6 +22,8 @@ import java.util.LinkedList;
 
 import org.apache.commons.math3.stat.StatUtils;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+
+import com.kircherelectronics.accelerationfilter.AccelerationFilterActivity;
 
 import android.util.Log;
 

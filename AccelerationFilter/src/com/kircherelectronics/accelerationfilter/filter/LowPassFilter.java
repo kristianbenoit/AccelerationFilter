@@ -1,4 +1,4 @@
-package com.kircherelectronics.accelerationfilter;
+package com.kircherelectronics.accelerationfilter.filter;
 
 /*
  * Acceleration Filter
