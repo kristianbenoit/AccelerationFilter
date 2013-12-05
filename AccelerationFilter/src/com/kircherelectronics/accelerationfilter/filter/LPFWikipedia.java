@@ -30,6 +30,7 @@ import android.util.Log;
  * the time constant is the length of signals the filter should act on and dt is
  * the sample period (1/frequency) of the sensor.
  * 
+ * 
  * @author Kaleb
  * @see http://en.wikipedia.org/wiki/Low-pass_filter
  * @version %I%, %G%

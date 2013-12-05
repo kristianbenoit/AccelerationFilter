@@ -31,6 +31,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -77,31 +78,22 @@ import android.widget.Toast;
  * inputs and then graph the outputs. The user can select which filters should
  * be used and set key parameters for each filter.
  * 
- * Currently supports two versions of IIR digital low-pass filter. The low-pass
- * filters are classified as recursive, or infinite response filters (IIR). The
- * current, nth sample output depends on both current and previous inputs as
- * well as previous outputs. It is essentially a weighted moving average, which
- * comes in many different flavors depending on the values for the coefficients,
- * a and b.
- * 
- * The first low-pass filter, the Wikipedia LPF, is an IIR single-pole
- * implementation. The coefficient, a (alpha), can be adjusted based on the
- * sample period of the sensor to produce the desired time constant that the
- * filter will act on. It takes a simple form of y[i] = y[i] + alpha * (x[i] -
- * y[i]). Alpha is defined as alpha = dt / (timeConstant + dt);) where the time
- * constant is the length of signals the filter should act on and dt is the
- * sample period (1/frequency) of the sensor.
- * 
- * The second low-pass filter, the Android Developer LPF, is an IIR single-pole
- * implementation. The coefficient, a (alpha), can be adjusted based on the
- * sample period of the sensor to produce the desired time constant that the
- * filter will act on. It is essentially the same as the Wikipedia LPF. It takes
- * a simple form of y[0] = alpha * y[0] + (1 - alpha) * x[0]. Alpha is defined
- * as alpha = timeConstant / (timeConstant + dt) where the time constant is the
- * length of signals the filter should act on and dt is the sample period
- * (1/frequency) of the sensor.
+ * Currently supports an IIR digital low-pass filter. The low-pass filters are
+ * classified as recursive, or infinite response filters (IIR). The current, nth
+ * sample output depends on both current and previous inputs as well as previous
+ * outputs. It is essentially a weighted moving average, which comes in many
+ * different flavors depending on the values for the coefficients, a and b. The
+ * low-pass filter, the Wikipedia LPF, is an IIR single-pole implementation. The
+ * coefficient, a (alpha), can be adjusted based on the sample period of the
+ * sensor to produce the desired time constant that the filter will act on. It
+ * takes a simple form of y[i] = y[i] + alpha * (x[i] - y[i]). Alpha is defined
+ * as alpha = dt / (timeConstant + dt);) where the time constant is the length
+ * of signals the filter should act on and dt is the sample period (1/frequency)
+ * of the sensor.
  * 
  * A finite impulse response (FIR) moving average filter is also implemented.
+ * This filter tends to be extremely effective at removing noise from the
+ * signal, much more so than the low-pass filter.
  * 
  * @author Kaleb
  * @version %I%, %G%
@@ -113,9 +105,18 @@ public class AccelerationFilterActivity extends Activity implements
 	// Only noise below this threshold will be plotted
 	private final static float MAX_NOISE_THRESHOLD = 0.03f;
 
+	// The static alpha for the LPF Wikipedia
+	private static float WIKI_STATIC_ALPHA = 0.1f;
+	// The static alpha for the LPF Android Developer
+	private static float AND_DEV_STATIC_ALPHA = 0.9f;
+
 	// The size of the sample window that determines RMS Amplitude Noise
 	// (standard deviation)
 	private static int MEAN_SAMPLE_WINDOW = 20;
+
+	// The size of the sample window that determines RMS Amplitude Noise
+	// (standard deviation)
+	private static int STD_DEV_SAMPLE_WINDOW = 20;
 
 	// Plot keys for the acceleration plot
 	private final static int PLOT_ACCEL_X_AXIS_KEY = 0;
@@ -163,16 +164,9 @@ public class AccelerationFilterActivity extends Activity implements
 	// Decimal formats for the UI outputs
 	private DecimalFormat df;
 
-	private SettingsDialog settingsDialog;
-
 	private DynamicBarPlot barPlot;
 	// Graph plot for the UI outputs
 	private DynamicLinePlot dynamicPlot;
-
-	// The static alpha for the LPF Wikipedia
-	private float wikiAlpha;
-	// The static alpha for the LPF Android Developer
-	private float andDevAlpha;
 
 	// Touch to zoom constants for the dynamicPlot
 	private float distance = 0;
@@ -228,6 +222,8 @@ public class AccelerationFilterActivity extends Activity implements
 	// Sensor manager to access the accelerometer sensor
 	private SensorManager sensorManager;
 
+	private SettingsDialog settingsDialog;
+
 	// RMS Noise levels
 	private StdDev varianceAccel;
 	private StdDev varianceLPFWiki;
@@ -269,7 +265,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	public static int getSampleWindow()
 	{
-		return MEAN_SAMPLE_WINDOW;
+		return STD_DEV_SAMPLE_WINDOW;
 	}
 
 	@Override
@@ -652,10 +648,10 @@ public class AccelerationFilterActivity extends Activity implements
 
 		// Initialize the low-pass filters with the saved prefs
 		lpfWiki.setAlphaStatic(plotLPFAndDev);
-		lpfWiki.setAlpha(wikiAlpha);
+		lpfWiki.setAlpha(WIKI_STATIC_ALPHA);
 
 		lpfAndDev.setAlphaStatic(plotLPFWiki);
-		lpfAndDev.setAlpha(andDevAlpha);
+		lpfAndDev.setAlpha(AND_DEV_STATIC_ALPHA);
 
 	}
 
@@ -784,7 +780,7 @@ public class AccelerationFilterActivity extends Activity implements
 		Dialog helpDialog = new Dialog(this);
 		helpDialog.setCancelable(true);
 		helpDialog.setCanceledOnTouchOutside(true);
-		
+
 		helpDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
 		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help,
@@ -950,9 +946,20 @@ public class AccelerationFilterActivity extends Activity implements
 		}
 		finally
 		{
-			this.sendBroadcast(new Intent(Intent.ACTION_MEDIA_MOUNTED, Uri
-					.parse("file://"
-							+ Environment.getExternalStorageDirectory())));
+			// Update the MediaStore so we can view the file without rebooting.
+			// Note that it appears that the ACTION_MEDIA_MOUNTED approach is
+			// now blocked for non-system apps on Android 4.4.
+			MediaScannerConnection.scanFile(this, new String[]
+			{ "file://" + Environment.getExternalStorageDirectory() }, null,
+					new MediaScannerConnection.OnScanCompletedListener()
+					{
+						@Override
+						public void onScanCompleted(final String path,
+								final Uri uri)
+						{
+					
+						}
+					});
 		}
 	}
 
@@ -968,8 +975,8 @@ public class AccelerationFilterActivity extends Activity implements
 		this.plotLPFWiki = prefs.getBoolean("plot_lpf_wiki", false);
 		this.plotMeanFilter = prefs.getBoolean("plot_mean", false);
 
-		this.wikiAlpha = prefs.getFloat("lpf_wiki_alpha", 0.1f);
-		this.andDevAlpha = prefs.getFloat("lpf_and_dev_alpha", 0.9f);
+		this.WIKI_STATIC_ALPHA = prefs.getFloat("lpf_wiki_alpha", 0.1f);
+		this.AND_DEV_STATIC_ALPHA = prefs.getFloat("lpf_and_dev_alpha", 0.9f);
 		MEAN_SAMPLE_WINDOW = prefs.getInt("window_mean", 50);
 	}
 

@@ -206,14 +206,11 @@ public class SettingsDialog extends Dialog implements
 
 		if (picker.equals(meanWindowNP))
 		{
-			andDevAlphaTextView.setText(df.format(newVal));
+			meanFilterTextView.setText(df.format(newVal));
 
-			if (showAndDevSetAlpha)
-			{
-				meanWindow = newVal;
+			meanWindow = newVal;
 
-				meanFilter.setWindowSize(meanWindow);
-			}
+			meanFilter.setWindowSize(meanWindow);
 		}
 	}
 

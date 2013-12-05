@@ -31,6 +31,7 @@ import android.util.Log;
  * dt) where the time constant is the length of signals the filter should act on
  * and dt is the sample period (1/frequency) of the sensor.
  * 
+ * 
  * @author Kaleb
  * @see http://developer.android.com/reference/android/hardware/SensorEvent.html
  * @version %I%, %G%
