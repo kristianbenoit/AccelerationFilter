@@ -595,7 +595,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void addLPFAndDevPlot()
 	{
-		if (plotLPFAndDev)
+		if (plotLPFAndDev && !plotLPFAndDevReady)
 		{
 			addGraphPlot(plotLPFAndDevXAxisTitle, PLOT_LPF_AND_DEV_X_AXIS_KEY,
 					plotLPFAndDevXAxisColor);
@@ -613,7 +613,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void addLPFWikiPlot()
 	{
-		if (plotLPFWiki)
+		if (plotLPFWiki && !plotLPFWikiReady)
 		{
 			addGraphPlot(plotLPFWikiXAxisTitle, PLOT_LPF_WIKI_X_AXIS_KEY,
 					plotLPFWikiXAxisColor);
@@ -631,7 +631,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void addMeanFilterPlot()
 	{
-		if (plotMeanFilter)
+		if (plotMeanFilter && !plotMeanReady)
 		{
 			addGraphPlot(plotMeanXAxisTitle, PLOT_MEAN_X_AXIS_KEY,
 					plotMeanXAxisColor);
