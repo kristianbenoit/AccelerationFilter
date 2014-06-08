@@ -88,13 +88,13 @@ public class DynamicBarPlot
 		// This needs to be changed with the number of plots, must be >= 1
 		levelsPlot.setDomainStepValue(4);
 
-		levelsPlot.setRangeStep(XYStepMode.INCREMENT_BY_VAL, .005);
+		levelsPlot.setRangeStep(XYStepMode.INCREMENT_BY_VAL, .02);
 		levelsPlot.setRangeValueFormat(new DecimalFormat("#.###"));
 
 		// Fir the range. If we did not do this, the plot would
 		// auto-range which can be visually confusing in the case of dynamic
 		// plots.
-		levelsPlot.setRangeBoundaries(0, 0.03, BoundaryMode.FIXED);
+		levelsPlot.setRangeBoundaries(0, 0.12, BoundaryMode.FIXED);
 
 		// use our custom domain value formatter:
 		levelsPlot.setDomainValueFormat(new DomainIndexFormat());
@@ -174,7 +174,6 @@ public class DynamicBarPlot
 		@Override
 		public Object parseObject(String string, ParsePosition position)
 		{
-			// TODO Auto-generated method stub
 			return null;
 		}
 	}

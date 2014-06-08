@@ -1,9 +1,10 @@
 package com.kircherelectronics.accelerationfilter.filter;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+
+import android.util.Log;
 
 import com.kircherelectronics.accelerationfilter.AccelerationFilterActivity;
 
@@ -32,6 +33,9 @@ import com.kircherelectronics.accelerationfilter.AccelerationFilterActivity;
  */
 public class MeanFilter
 {
+	private static final String tag = MeanFilter.class
+			.getSimpleName();
+	
 	// The size of the mean filters rolling window.
 	private int filterWindow = AccelerationFilterActivity.getSampleWindow();
 
