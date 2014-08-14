@@ -15,100 +15,223 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" >
 
-            <RelativeLayout
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp" >
+                android:orientation="vertical" >
 
                 <RelativeLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_centerHorizontal="true" >
+                    android:layout_marginTop="5dp" >
 
-                    <TextView
-                        android:id="@+id/label_filter_name"
+                    <RelativeLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-condensed"
-                        android:text="@string/filter_label"
-                        android:textAppearance="?android:attr/textAppearanceSmall"
-                        android:textColor="@color/light_green" />
+                        android:layout_centerHorizontal="true" >
 
-                    <TextView
-                        android:id="@+id/label_filter_description"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_toRightOf="@+id/label_filter_name"
-                        android:fontFamily="sans-serif-condensed"
-                        android:text="@string/action_settings"
-                        android:textAppearance="?android:attr/textAppearanceSmall" />
+                        <TextView
+                            android:id="@+id/label_lpf_name"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-condensed"
+                            android:text="@string/low_pass_filter_label"
+                            android:textAppearance="?android:attr/textAppearanceSmall"
+                            android:textColor="@color/light_green" />
+
+                        <TextView
+                            android:id="@+id/label_lpf_description"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_toRightOf="@+id/label_lpf_name"
+                            android:fontFamily="sans-serif-condensed"
+                            android:text="@string/action_settings"
+                            android:textAppearance="?android:attr/textAppearanceSmall" />
+                    </RelativeLayout>
                 </RelativeLayout>
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/layout_plot_checkbox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp" >
 
                 <RelativeLayout
-                    android:layout_width="wrap_content"
+                    android:id="@+id/layout_lpf_checkbox"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_centerHorizontal="true" >
+                    android:layout_marginTop="5dp" >
 
-                    <TextView
-                        android:id="@+id/label_plot_mode"
+                    <RelativeLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_alignParentLeft="true"
-                        android:layout_marginLeft="15dp"
-                        android:fontFamily="sans-serif-condensed"
-                        android:text="@string/plot_filter"
-                        android:textAppearance="?android:attr/textAppearanceSmall"
-                        android:textColor="@color/white" />
+                        android:layout_centerHorizontal="true" >
 
-                    <CheckBox
-                        android:id="@+id/check_box_plot"
+                        <TextView
+                            android:id="@+id/label_lpf_active"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentLeft="true"
+                            android:layout_marginLeft="15dp"
+                            android:fontFamily="sans-serif-condensed"
+                            android:text="@string/filter_active_label"
+                            android:textAppearance="?android:attr/textAppearanceSmall"
+                            android:textColor="@color/white" />
+
+                        <CheckBox
+                            android:id="@+id/check_box_lpf_active"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentRight="true"
+                            android:layout_alignParentTop="true"
+                            android:layout_centerHorizontal="true"
+                            android:layout_marginRight="15dp" />
+                    </RelativeLayout>
+                </RelativeLayout>
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp" >
+
+                    <EditText
+                        android:id="@+id/edit_text_lpf_time_constant"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_alignParentRight="true"
                         android:layout_alignParentTop="true"
-                        android:layout_centerHorizontal="true"
-                        android:layout_marginRight="15dp" />
-                </RelativeLayout>
-            </RelativeLayout>
+                        android:ems="10"
+                        android:inputType="numberDecimal" />
 
-            <RelativeLayout
+                    <TextView
+                        android:id="@+id/label_lpf_time_constant"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentLeft="true"
+                        android:layout_centerVertical="true"
+                        android:layout_marginLeft="15dp"
+                        android:fontFamily="sans-serif-condensed"
+                        android:text="@string/time_constant_label"
+                        android:textAppearance="?android:attr/textAppearanceSmall"
+                        android:textColor="@color/white" />
+                </RelativeLayout>
+
+                <View
+                    android:layout_width="fill_parent"
+                    android:layout_height="1dp"
+                    android:background="@android:color/darker_gray" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp" >
+                android:orientation="vertical" >
 
                 <RelativeLayout
-                    android:id="@+id/layout_toggle_values"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_centerHorizontal="true" >
-                </RelativeLayout>
-            </RelativeLayout>
+                    android:layout_marginTop="5dp" >
 
-            <RelativeLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp" >
+                    <RelativeLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_centerHorizontal="true" >
+
+                        <TextView
+                            android:id="@+id/label_mean_filter_name"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-condensed"
+                            android:text="@string/mean_filter_label"
+                            android:textAppearance="?android:attr/textAppearanceSmall"
+                            android:textColor="@color/light_green" />
+
+                        <TextView
+                            android:id="@+id/label_lpf_mean_description"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_toRightOf="@+id/label_mean_filter_name"
+                            android:fontFamily="sans-serif-condensed"
+                            android:text="@string/action_settings"
+                            android:textAppearance="?android:attr/textAppearanceSmall" />
+                    </RelativeLayout>
+                </RelativeLayout>
 
                 <RelativeLayout
-                    android:id="@+id/layout_set_values"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/layout_mean_filter_checkbox"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_centerHorizontal="true" >
-                </RelativeLayout>
-            </RelativeLayout>
+                    android:layout_marginTop="5dp" >
 
-            <View
-                android:layout_width="fill_parent"
-                android:layout_height="1dp"
-                android:background="@android:color/darker_gray" />
+                    <RelativeLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_centerHorizontal="true" >
+
+                        <TextView
+                            android:id="@+id/label_mean_filter_active"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentLeft="true"
+                            android:layout_marginLeft="15dp"
+                            android:fontFamily="sans-serif-condensed"
+                            android:text="@string/filter_active_label"
+                            android:textAppearance="?android:attr/textAppearanceSmall"
+                            android:textColor="@color/white" />
+
+                        <CheckBox
+                            android:id="@+id/check_box_mean_filter_active"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentRight="true"
+                            android:layout_alignParentTop="true"
+                            android:layout_centerHorizontal="true"
+                            android:layout_marginRight="15dp" />
+                    </RelativeLayout>
+                </RelativeLayout>
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp" >
+
+                    <EditText
+                        android:id="@+id/edit_text_mean_filter_time_constant"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentRight="true"
+                        android:layout_alignParentTop="true"
+                        android:ems="10"
+                        android:inputType="numberDecimal" />
+
+                    <TextView
+                        android:id="@+id/label_mean_filter_time_constant"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentLeft="true"
+                        android:layout_centerVertical="true"
+                        android:layout_marginLeft="15dp"
+                        android:fontFamily="sans-serif-condensed"
+                        android:text="@string/time_constant_label"
+                        android:textAppearance="?android:attr/textAppearanceSmall"
+                        android:textColor="@color/white" />
+                </RelativeLayout>
+
+                <View
+                    android:layout_width="fill_parent"
+                    android:layout_height="1dp"
+                    android:background="@android:color/darker_gray" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp" >
+
+        <Button
+            android:id="@+id/button_accept"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_centerHorizontal="true"
+            android:text="Accept" />
+
+    </RelativeLayout>
 
 </LinearLayout>

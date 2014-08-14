@@ -1,4 +1,4 @@
-package com.kircherelectronics.accelerationfilter;
+package com.kircherelectronics.accelerationfilter.activity;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -7,10 +7,13 @@ import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.Calendar;
 
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -35,15 +38,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.androidplot.xy.XYPlot;
+import com.kircherelectronics.accelerationfilter.R;
 import com.kircherelectronics.accelerationfilter.dialog.SettingsDialog;
-import com.kircherelectronics.accelerationfilter.filter.LPFAndroidDeveloper;
-import com.kircherelectronics.accelerationfilter.filter.LPFWikipedia;
 import com.kircherelectronics.accelerationfilter.filter.LowPassFilter;
 import com.kircherelectronics.accelerationfilter.filter.MeanFilter;
 import com.kircherelectronics.accelerationfilter.plot.DynamicBarPlot;
 import com.kircherelectronics.accelerationfilter.plot.DynamicLinePlot;
 import com.kircherelectronics.accelerationfilter.plot.PlotColor;
-import com.kircherelectronics.accelerationfilter.statistics.StdDev;
+import com.kircherelectronics.accelerationfilter.plot.PlotPrefCallback;
+import com.kircherelectronics.accelerationfilter.prefs.PrefUtils;
 
 /*
  * Acceleration Filter
@@ -88,84 +91,68 @@ import com.kircherelectronics.accelerationfilter.statistics.StdDev;
  * @author Kaleb
  * @version %I%, %G%
  */
-public class AccelerationFilterActivity extends Activity implements
-		SensorEventListener, Runnable, OnTouchListener
+public class AccelerationPlotActivity extends Activity implements
+		SensorEventListener, Runnable, OnTouchListener, PlotPrefCallback
 {
 
-	private static final String tag = AccelerationFilterActivity.class
+	private static final String tag = AccelerationPlotActivity.class
 			.getSimpleName();
 
 	// Only noise below this threshold will be plotted
 	private final static float MAX_NOISE_THRESHOLD = 0.1f;
 
-	// The static alpha for the LPF Wikipedia
-	private static float WIKI_STATIC_ALPHA = 0.1f;
-	// The static alpha for the LPF Android Developer
-	private static float AND_DEV_STATIC_ALPHA = 0.9f;
-
 	// The size of the sample window that determines RMS Amplitude Noise
 	// (standard deviation)
-	private static int MEAN_SAMPLE_WINDOW = 20;
-
-	// The size of the sample window that determines RMS Amplitude Noise
-	// (standard deviation)
-	private static int STD_DEV_SAMPLE_WINDOW = 20;
+	public static int STD_DEV_SAMPLE_WINDOW = 20;
 
 	// Plot keys for the acceleration plot
 	private final static int PLOT_ACCEL_X_AXIS_KEY = 0;
 	private final static int PLOT_ACCEL_Y_AXIS_KEY = 1;
 	private final static int PLOT_ACCEL_Z_AXIS_KEY = 2;
 
-	// Plot keys for the LPF Wikipedia plot
-	private final static int PLOT_LPF_WIKI_X_AXIS_KEY = 3;
-	private final static int PLOT_LPF_WIKI_Y_AXIS_KEY = 4;
-	private final static int PLOT_LPF_WIKI_Z_AXIS_KEY = 5;
-
 	// Plot keys for the LPF Android Developer plot
-	private final static int PLOT_LPF_AND_DEV_X_AXIS_KEY = 6;
-	private final static int PLOT_LPF_AND_DEV_Y_AXIS_KEY = 7;
-	private final static int PLOT_LPF_AND_DEV_Z_AXIS_KEY = 8;
+	private final static int PLOT_LPF_X_AXIS_KEY = 3;
+	private final static int PLOT_LPF_Y_AXIS_KEY = 4;
+	private final static int PLOT_LPF_Z_AXIS_KEY = 5;
 
 	// Plot keys for the mean filter plot
-	private final static int PLOT_MEAN_X_AXIS_KEY = 9;
-	private final static int PLOT_MEAN_Y_AXIS_KEY = 10;
-	private final static int PLOT_MEAN_Z_AXIS_KEY = 11;
+	private final static int PLOT_MEAN_X_AXIS_KEY = 6;
+	private final static int PLOT_MEAN_Y_AXIS_KEY = 7;
+	private final static int PLOT_MEAN_Z_AXIS_KEY = 8;
 
 	// Plot keys for the noise bar plot
 	private final static int BAR_PLOT_ACCEL_KEY = 0;
-	private final static int BAR_PLOT_LPF_WIKI_KEY = 1;
-	private final static int BAR_PLOT_LPF_AND_DEV_KEY = 2;
-	private final static int BAR_PLOT_MEAN_KEY = 3;
+	private final static int BAR_PLOT_LPF_KEY = 1;
+	private final static int BAR_PLOT_MEAN_KEY = 2;
 
 	private boolean dataReady = false;
-	
+
 	// Indicate if the output should be logged to a .csv file
 	private boolean logData = false;
 
 	// Indicate if the AndDev LPF should be plotted
-	private boolean plotLPFAndDev = false;
-
-	// Indicate if the Wiki LPF should be plotted
-	private boolean plotLPFWiki = false;
+	private boolean lpfActive = false;
 
 	// Indicate if the Mean Filter should be plotted
-	private boolean plotMeanFilter = false;
+	private boolean meanFilterActive = false;
 
-	// Indicate the plots are ready to accept inputs
-	private boolean plotLPFWikiReady = false;
-	private boolean plotLPFAndDevReady = false;
+	private boolean plotLPFReady = false;
 	private boolean plotMeanReady = false;
-	
+
 	private boolean run = false;
+
+	private double dStdDevMeanZAxis = 0;
 
 	// Touch to zoom constants for the dynamicPlot
 	private float distance = 0;
 	private float zoom = 1.2f;
 
+	private float lpfTimeConstant = 1;
+	private float meanFilterTimeConstant = 1;
+
 	// Outputs for the acceleration and LPFs
 	private float[] acceleration = new float[3];
-	private float[] lpfWikiOutput = new float[3];
-	private float[] lpfAndDevOutput = new float[3];
+	private float[] lpfOutput = new float[3];
 	private float[] meanFilterOutput = new float[3];
 
 	// The generation of the log output
@@ -176,15 +163,10 @@ public class AccelerationFilterActivity extends Activity implements
 	private int plotAccelYAxisColor;
 	private int plotAccelZAxisColor;
 
-	// Color keys for the LPF Wikipedia plot
-	private int plotLPFWikiXAxisColor;
-	private int plotLPFWikiYAxisColor;
-	private int plotLPFWikiZAxisColor;
-
 	// Color keys for the LPF Android Developer plot
-	private int plotLPFAndDevXAxisColor;
-	private int plotLPFAndDevYAxisColor;
-	private int plotLPFAndDevZAxisColor;
+	private int plotLPFXAxisColor;
+	private int plotLPFYAxisColor;
+	private int plotLPFZAxisColor;
 
 	// Color keys for the mean filter plot
 	private int plotMeanXAxisColor;
@@ -207,15 +189,15 @@ public class AccelerationFilterActivity extends Activity implements
 	// Icon to indicate logging is active
 	private ImageView iconLogger;
 
-	// Low-Pass Filters
-	private LowPassFilter lpfWiki;
-	private LowPassFilter lpfAndDev;
+	// Low-Pass Filter
+	private LowPassFilter lpf;
 
+	// Mean filter
 	private MeanFilter meanFilter;
 
 	// Plot colors
 	private PlotColor color;
-	
+
 	private Runnable runnable;
 
 	// Sensor manager to access the accelerometer sensor
@@ -224,30 +206,27 @@ public class AccelerationFilterActivity extends Activity implements
 	private SettingsDialog settingsDialog;
 
 	// RMS Noise levels
-	private StdDev varianceAccel;
-	private StdDev varianceLPFWiki;
-	private StdDev varianceLPFAndDev;
-	private StdDev varianceMean;
+	private DescriptiveStatistics stdDevMaginitudeAccel;
+	private DescriptiveStatistics stdDevMaginitude;
+	private DescriptiveStatistics stdDevMaginitudeMean;
+
+	private DescriptiveStatistics stdDevMaginitudeMeanZAxis;
 
 	// Acceleration plot titles
-	private String plotAccelXAxisTitle = "AX";
-	private String plotAccelYAxisTitle = "AY";
-	private String plotAccelZAxisTitle = "AZ";
-
-	// LPF Wikipedia plot titles
-	private String plotLPFWikiXAxisTitle = "WX";
-	private String plotLPFWikiYAxisTitle = "WY";
-	private String plotLPFWikiZAxisTitle = "WZ";
+	private String plotAccelXAxisTitle = "A-X";
+	private String plotAccelYAxisTitle = "A-Y";
+	private String plotAccelZAxisTitle = "A-Z";
 
 	// LPF Android Developer plot tiltes
-	private String plotLPFAndDevXAxisTitle = "ADX";
-	private String plotLPFAndDevYAxisTitle = "ADY";
-	private String plotLPFAndDevZAxisTitle = "ADZ";
+	private String plotLPFXAxisTitle = "LPF-X";
+	private String plotLPFYAxisTitle = "LPF-Y";
+	private String plotLPFZAxisTitle = "LPF-Z";
 
 	// Mean filter plot tiltes
-	private String plotMeanXAxisTitle = "MX";
-	private String plotMeanYAxisTitle = "MY";
-	private String plotMeanZAxisTitle = "MZ";
+	private String plotMeanXAxisTitle = "M-X";
+	private String plotMeanYAxisTitle = "M-Y";
+	private String plotMeanZAxisTitle = "M-Z";
+	private String plotStdDevMeanZAxisTitle = "StdDevMZ";
 
 	// Output log
 	private String log;
@@ -256,18 +235,8 @@ public class AccelerationFilterActivity extends Activity implements
 	private TextView xAxis;
 	private TextView yAxis;
 	private TextView zAxis;
-	
-	private Thread thread;
 
-	/**
-	 * Get the sample window size for the standard deviation.
-	 * 
-	 * @return Sample window size for the standard deviation.
-	 */
-	public static int getSampleWindow()
-	{
-		return STD_DEV_SAMPLE_WINDOW;
-	}
+	private Thread thread;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState)
@@ -295,7 +264,7 @@ public class AccelerationFilterActivity extends Activity implements
 				.getSystemService(Context.SENSOR_SERVICE);
 
 		handler = new Handler();
-		
+
 		runnable = new Runnable()
 		{
 			@Override
@@ -320,7 +289,7 @@ public class AccelerationFilterActivity extends Activity implements
 		{
 			writeLogToFile();
 		}
-		
+
 		if (run && thread != null)
 		{
 			run = false;
@@ -340,6 +309,10 @@ public class AccelerationFilterActivity extends Activity implements
 
 		readPrefs();
 		
+		// Reset the filters
+		lpf.reset();
+		meanFilter.reset();
+
 		thread = new Thread(this);
 
 		if (!run)
@@ -369,19 +342,20 @@ public class AccelerationFilterActivity extends Activity implements
 		// Get a local copy of the sensor values
 		System.arraycopy(event.values, 0, acceleration, 0, event.values.length);
 
-		if (plotLPFWiki)
+		if (lpfActive)
 		{
-			lpfWikiOutput = lpfWiki.addSamples(acceleration);
+			lpfOutput = lpf.addSamples(acceleration);
 		}
-		if (plotLPFAndDev)
-		{
-			lpfAndDevOutput = lpfAndDev.addSamples(acceleration);
-		}
-		if (plotMeanFilter)
+		if (meanFilterActive)
 		{
 			meanFilterOutput = meanFilter.filterFloat(acceleration);
+
+			stdDevMaginitudeMeanZAxis.addValue(meanFilterOutput[2]);
+
+			this.dStdDevMeanZAxis = stdDevMaginitudeMeanZAxis
+					.getStandardDeviation();
 		}
-		
+
 		dataReady = true;
 	}
 
@@ -389,10 +363,10 @@ public class AccelerationFilterActivity extends Activity implements
 	public boolean onCreateOptionsMenu(Menu menu)
 	{
 		MenuInflater inflater = getMenuInflater();
-		inflater.inflate(R.menu.settings_logger_menu, menu);
+		inflater.inflate(R.menu.settings_plot_menu, menu);
 		return true;
 	}
-	
+
 	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	private void updateMenu()
 	{
@@ -416,6 +390,12 @@ public class AccelerationFilterActivity extends Activity implements
 			return true;
 
 			// Log the data
+		case R.id.action_vector:
+			Intent myIntent = new Intent(this, AccelerationVectorActivity.class);
+			startActivity(myIntent);
+			return true;
+
+			// Log the data
 		case R.id.menu_settings_filter:
 			showSettingsDialog();
 			return true;
@@ -429,7 +409,7 @@ public class AccelerationFilterActivity extends Activity implements
 			return super.onOptionsItemSelected(item);
 		}
 	}
-	
+
 	/**
 	 * Manage the content of the options menu dynamically.
 	 */
@@ -437,16 +417,16 @@ public class AccelerationFilterActivity extends Activity implements
 	public boolean onPrepareOptionsMenu(Menu menu)
 	{
 		super.onPrepareOptionsMenu(menu);
-		
+
 		if (logData)
 		{
-			menu.getItem(1).getSubMenu().getItem(0).setEnabled(false);
+			menu.getItem(2).getSubMenu().getItem(0).setEnabled(false);
 		}
 		else
 		{
-			menu.getItem(1).getSubMenu().getItem(0).setEnabled(true);
+			menu.getItem(2).getSubMenu().getItem(0).setEnabled(true);
 		}
-		
+
 		return true;
 	}
 
@@ -496,45 +476,43 @@ public class AccelerationFilterActivity extends Activity implements
 	{
 		while (run && !Thread.currentThread().isInterrupted())
 		{
+			try
+			{
+				Thread.sleep(50);
+			}
+			catch (InterruptedException e)
+			{
+				e.printStackTrace();
+			}
+
 			logData();
 		}
 
 		Thread.currentThread().interrupt();
 	}
-
-	/**
-	 * Indicate if the Wikipedia LPF should be plotted.
-	 * 
-	 * @param plotLPFWiki
-	 *            Plot the filter if true.
-	 */
-	public void setPlotLPFWiki(boolean plotLPFWiki)
+	
+	@Override
+	public void checkPlotPrefs()
 	{
-		this.plotLPFWiki = plotLPFWiki;
-
-		if (this.plotLPFWiki)
-		{
-			addLPFWikiPlot();
-		}
-		else
-		{
-			removeLPFWikiPlot();
-		}
+		readPrefs();
+		checkLPFActive();
+		checkMeanActive();
+		
+		lpf.setTimeConstant(this.lpfTimeConstant);
+		meanFilter.setTimeConstant(this.meanFilterTimeConstant);
 	}
 
 	/**
 	 * Indicate if the Android Developer LPF should be plotted.
 	 * 
-	 * @param plotLPFAndDev
+	 * @param lpfActive
 	 *            Plot the filter if true.
 	 */
-	public void setPlotLPFAndDev(boolean plotLPFAndDev)
+	private void checkLPFActive()
 	{
-		this.plotLPFAndDev = plotLPFAndDev;
-
-		if (this.plotLPFAndDev)
+		if (this.lpfActive)
 		{
-			addLPFAndDevPlot();
+			addLPFPlot();
 		}
 		else
 		{
@@ -545,14 +523,12 @@ public class AccelerationFilterActivity extends Activity implements
 	/**
 	 * Indicate if the Mean Filter should be plotted.
 	 * 
-	 * @param plotMean
+	 * @param meanFilterActive
 	 *            Plot the filter if true.
 	 */
-	public void setPlotMean(boolean plotMean)
+	private void checkMeanActive()
 	{
-		this.plotMeanFilter = plotMean;
-
-		if (this.plotMeanFilter)
+		if (this.meanFilterActive)
 		{
 			addMeanFilterPlot();
 		}
@@ -593,36 +569,18 @@ public class AccelerationFilterActivity extends Activity implements
 	/**
 	 * Add the Android Developer LPF plot.
 	 */
-	private void addLPFAndDevPlot()
+	private void addLPFPlot()
 	{
-		if (plotLPFAndDev && !plotLPFAndDevReady)
+		if (lpfActive && !plotLPFReady)
 		{
-			addGraphPlot(plotLPFAndDevXAxisTitle, PLOT_LPF_AND_DEV_X_AXIS_KEY,
-					plotLPFAndDevXAxisColor);
-			addGraphPlot(plotLPFAndDevYAxisTitle, PLOT_LPF_AND_DEV_Y_AXIS_KEY,
-					plotLPFAndDevYAxisColor);
-			addGraphPlot(plotLPFAndDevZAxisTitle, PLOT_LPF_AND_DEV_Z_AXIS_KEY,
-					plotLPFAndDevZAxisColor);
+			addGraphPlot(plotLPFXAxisTitle, PLOT_LPF_X_AXIS_KEY,
+					plotLPFXAxisColor);
+			addGraphPlot(plotLPFYAxisTitle, PLOT_LPF_Y_AXIS_KEY,
+					plotLPFYAxisColor);
+			addGraphPlot(plotLPFZAxisTitle, PLOT_LPF_Z_AXIS_KEY,
+					plotLPFZAxisColor);
 
-			plotLPFAndDevReady = true;
-		}
-	}
-
-	/**
-	 * Add the Wikipedia LPF plot.
-	 */
-	private void addLPFWikiPlot()
-	{
-		if (plotLPFWiki && !plotLPFWikiReady)
-		{
-			addGraphPlot(plotLPFWikiXAxisTitle, PLOT_LPF_WIKI_X_AXIS_KEY,
-					plotLPFWikiXAxisColor);
-			addGraphPlot(plotLPFWikiYAxisTitle, PLOT_LPF_WIKI_Y_AXIS_KEY,
-					plotLPFWikiYAxisColor);
-			addGraphPlot(plotLPFWikiZAxisTitle, PLOT_LPF_WIKI_Z_AXIS_KEY,
-					plotLPFWikiZAxisColor);
-
-			plotLPFWikiReady = true;
+			plotLPFReady = true;
 		}
 	}
 
@@ -631,7 +589,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void addMeanFilterPlot()
 	{
-		if (plotMeanFilter && !plotMeanReady)
+		if (meanFilterActive && !plotMeanReady)
 		{
 			addGraphPlot(plotMeanXAxisTitle, PLOT_MEAN_X_AXIS_KEY,
 					plotMeanXAxisColor);
@@ -668,13 +626,9 @@ public class AccelerationFilterActivity extends Activity implements
 		plotAccelYAxisColor = color.getDarkGreen();
 		plotAccelZAxisColor = color.getDarkRed();
 
-		plotLPFWikiXAxisColor = color.getMidBlue();
-		plotLPFWikiYAxisColor = color.getMidGreen();
-		plotLPFWikiZAxisColor = color.getMidRed();
-
-		plotLPFAndDevXAxisColor = color.getLightBlue();
-		plotLPFAndDevYAxisColor = color.getLightGreen();
-		plotLPFAndDevZAxisColor = color.getLightRed();
+		plotLPFXAxisColor = color.getLightBlue();
+		plotLPFYAxisColor = color.getLightGreen();
+		plotLPFZAxisColor = color.getLightRed();
 
 		plotMeanXAxisColor = color.getLightBlue();
 		plotMeanYAxisColor = color.getLightGreen();
@@ -696,20 +650,11 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void initFilters()
 	{
-		// Create the low-pass filters
-		lpfWiki = new LPFWikipedia();
-		lpfAndDev = new LPFAndroidDeveloper();
+		lpf = new LowPassFilter();
+		lpf.setTimeConstant(this.lpfTimeConstant);
+		
 		meanFilter = new MeanFilter();
-
-		meanFilter.setWindowSize(MEAN_SAMPLE_WINDOW);
-
-		// Initialize the low-pass filters with the saved prefs
-		lpfWiki.setAlphaStatic(plotLPFAndDev);
-		lpfWiki.setAlpha(WIKI_STATIC_ALPHA);
-
-		lpfAndDev.setAlphaStatic(plotLPFWiki);
-		lpfAndDev.setAlpha(AND_DEV_STATIC_ALPHA);
-
+		meanFilter.setTimeConstant(this.meanFilterTimeConstant);
 	}
 
 	/**
@@ -734,8 +679,7 @@ public class AccelerationFilterActivity extends Activity implements
 		barPlot = new DynamicBarPlot(noiseLevelsPlot, "Sensor Noise");
 
 		addAccelerationPlot();
-		addLPFAndDevPlot();
-		addLPFWikiPlot();
+		addLPFPlot();
 		addMeanFilterPlot();
 	}
 
@@ -745,10 +689,17 @@ public class AccelerationFilterActivity extends Activity implements
 	private void initStatistics()
 	{
 		// Create the RMS Noise calculations
-		varianceAccel = new StdDev();
-		varianceLPFWiki = new StdDev();
-		varianceLPFAndDev = new StdDev();
-		varianceMean = new StdDev();
+		stdDevMaginitudeAccel = new DescriptiveStatistics();
+		stdDevMaginitudeAccel.setWindowSize(STD_DEV_SAMPLE_WINDOW);
+
+		stdDevMaginitude = new DescriptiveStatistics();
+		stdDevMaginitude.setWindowSize(STD_DEV_SAMPLE_WINDOW);
+
+		stdDevMaginitudeMean = new DescriptiveStatistics();
+		stdDevMaginitudeMean.setWindowSize(STD_DEV_SAMPLE_WINDOW);
+
+		stdDevMaginitudeMeanZAxis = new DescriptiveStatistics();
+		stdDevMaginitudeMeanZAxis.setWindowSize(180);
 	}
 
 	/**
@@ -772,8 +723,6 @@ public class AccelerationFilterActivity extends Activity implements
 	{
 		updateGraphPlot();
 
-		updateAccelerationText();
-
 		updateBarPlot();
 	}
 
@@ -782,7 +731,7 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void removeMeanFilterPlot()
 	{
-		if (!plotMeanFilter)
+		if (!meanFilterActive && plotMeanReady)
 		{
 			plotMeanReady = false;
 
@@ -797,28 +746,13 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void removeLPFAndDevPlot()
 	{
-		if (!plotLPFAndDev)
+		if (!lpfActive && plotLPFReady)
 		{
-			plotLPFAndDevReady = false;
+			plotLPFReady = false;
 
-			removeGraphPlot(PLOT_LPF_AND_DEV_X_AXIS_KEY);
-			removeGraphPlot(PLOT_LPF_AND_DEV_Y_AXIS_KEY);
-			removeGraphPlot(PLOT_LPF_AND_DEV_Z_AXIS_KEY);
-		}
-	}
-
-	/**
-	 * Remove the Wikipedia LPF plot.
-	 */
-	private void removeLPFWikiPlot()
-	{
-		if (!plotLPFWiki)
-		{
-			plotLPFWikiReady = false;
-
-			removeGraphPlot(PLOT_LPF_WIKI_X_AXIS_KEY);
-			removeGraphPlot(PLOT_LPF_WIKI_Y_AXIS_KEY);
-			removeGraphPlot(PLOT_LPF_WIKI_Z_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_X_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_Y_AXIS_KEY);
+			removeGraphPlot(PLOT_LPF_Z_AXIS_KEY);
 		}
 	}
 
@@ -853,8 +787,7 @@ public class AccelerationFilterActivity extends Activity implements
 	{
 		if (settingsDialog == null)
 		{
-			settingsDialog = new SettingsDialog(this, lpfWiki, lpfAndDev,
-					meanFilter);
+			settingsDialog = new SettingsDialog(this, this);
 			settingsDialog.setCancelable(true);
 			settingsDialog.setCanceledOnTouchOutside(true);
 		}
@@ -870,13 +803,15 @@ public class AccelerationFilterActivity extends Activity implements
 		if (logData == false)
 		{
 			generation = 0;
-			
+
+			stdDevMaginitudeMeanZAxis.clear();
+
 			CharSequence text = "Logging Data";
 			int duration = Toast.LENGTH_SHORT;
 
 			Toast toast = Toast.makeText(this, text, duration);
 			toast.show();
-			
+
 			String headers = "Generation" + ",";
 
 			headers += "Timestamp" + ",";
@@ -887,35 +822,28 @@ public class AccelerationFilterActivity extends Activity implements
 
 			headers += this.plotAccelZAxisTitle + ",";
 
-			if (plotLPFWiki)
+			if (lpfActive)
 			{
-				headers += this.plotLPFWikiXAxisTitle + ",";
+				headers += this.plotLPFXAxisTitle + ",";
 
-				headers += this.plotLPFWikiYAxisTitle + ",";
+				headers += this.plotLPFYAxisTitle + ",";
 
-				headers += this.plotLPFWikiZAxisTitle + ",";
+				headers += this.plotLPFZAxisTitle + ",";
 			}
 
-			if (plotLPFAndDev)
-			{
-				headers += this.plotLPFAndDevXAxisTitle + ",";
-
-				headers += this.plotLPFAndDevYAxisTitle + ",";
-
-				headers += this.plotLPFAndDevZAxisTitle + ",";
-			}
-
-			if (plotMeanFilter)
+			if (meanFilterActive)
 			{
 				headers += this.plotMeanXAxisTitle + ",";
 
 				headers += this.plotMeanYAxisTitle + ",";
 
 				headers += this.plotMeanZAxisTitle + ",";
+
+				headers += this.plotStdDevMeanZAxisTitle + ",";
 			}
 
 			log = headers;
-			
+
 			log += System.getProperty("line.separator");
 
 			iconLogger.setVisibility(View.VISIBLE);
@@ -951,29 +879,23 @@ public class AccelerationFilterActivity extends Activity implements
 			log += acceleration[1] + ",";
 			log += acceleration[2] + ",";
 
-			if (plotLPFWiki)
+			if (lpfActive)
 			{
-				log += lpfWikiOutput[0] + ",";
-				log += lpfWikiOutput[1] + ",";
-				log += lpfWikiOutput[2] + ",";
+				log += lpfOutput[0] + ",";
+				log += lpfOutput[1] + ",";
+				log += lpfOutput[2] + ",";
 			}
 
-			if (plotLPFAndDev)
-			{
-				log += lpfAndDevOutput[0] + ",";
-				log += lpfAndDevOutput[1] + ",";
-				log += lpfAndDevOutput[2] + ",";
-			}
-
-			if (plotMeanFilter)
+			if (meanFilterActive)
 			{
 				log += meanFilterOutput[0] + ",";
 				log += meanFilterOutput[1] + ",";
 				log += meanFilterOutput[2] + ",";
+				log += this.dStdDevMeanZAxis + ",";
 			}
-			
+
 			log += System.getProperty("line.separator");
-			
+
 			dataReady = false;
 		}
 	}
@@ -1051,16 +973,16 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void readPrefs()
 	{
-		SharedPreferences prefs = this.getSharedPreferences("lpf_prefs",
-				Activity.MODE_PRIVATE);
+		SharedPreferences prefs = this.getSharedPreferences(
+				PrefUtils.FILTER_PREFS, Activity.MODE_PRIVATE);
 
-		this.plotLPFAndDev = prefs.getBoolean("plot_lpf_and_dev", false);
-		this.plotLPFWiki = prefs.getBoolean("plot_lpf_wiki", false);
-		this.plotMeanFilter = prefs.getBoolean("plot_mean", false);
+		this.lpfActive = prefs.getBoolean(PrefUtils.LPF_ACTIVE_PREF, false);
+		this.meanFilterActive = prefs.getBoolean(
+				PrefUtils.MEAN_FILTER_ACTIVE_PREF, false);
 
-		WIKI_STATIC_ALPHA = prefs.getFloat("lpf_wiki_alpha", 0.1f);
-		AND_DEV_STATIC_ALPHA = prefs.getFloat("lpf_and_dev_alpha", 0.9f);
-		MEAN_SAMPLE_WINDOW = prefs.getInt("window_mean", 50);
+		this.lpfTimeConstant = prefs.getFloat(PrefUtils.LPF_TIME_CONSTANT, 1);
+		this.meanFilterTimeConstant = prefs.getFloat(
+				PrefUtils.MEAN_FILTER_TIME_CONSTANT, 1);
 	}
 
 	/**
@@ -1083,24 +1005,17 @@ public class AccelerationFilterActivity extends Activity implements
 		dynamicPlot.setData(acceleration[1], PLOT_ACCEL_Y_AXIS_KEY);
 		dynamicPlot.setData(acceleration[2], PLOT_ACCEL_Z_AXIS_KEY);
 
-		if (plotLPFWiki)
-		{
-			dynamicPlot.setData(lpfWikiOutput[0], PLOT_LPF_WIKI_X_AXIS_KEY);
-			dynamicPlot.setData(lpfWikiOutput[1], PLOT_LPF_WIKI_Y_AXIS_KEY);
-			dynamicPlot.setData(lpfWikiOutput[2], PLOT_LPF_WIKI_Z_AXIS_KEY);
-		}
-
-		if (plotLPFAndDev)
+		if (lpfActive)
 		{
 			dynamicPlot
-					.setData(lpfAndDevOutput[0], PLOT_LPF_AND_DEV_X_AXIS_KEY);
+					.setData(lpfOutput[0], PLOT_LPF_X_AXIS_KEY);
 			dynamicPlot
-					.setData(lpfAndDevOutput[1], PLOT_LPF_AND_DEV_Y_AXIS_KEY);
+					.setData(lpfOutput[1], PLOT_LPF_Y_AXIS_KEY);
 			dynamicPlot
-					.setData(lpfAndDevOutput[2], PLOT_LPF_AND_DEV_Z_AXIS_KEY);
+					.setData(lpfOutput[2], PLOT_LPF_Z_AXIS_KEY);
 		}
 
-		if (plotMeanFilter)
+		if (meanFilterActive)
 		{
 			dynamicPlot.setData(meanFilterOutput[0], PLOT_MEAN_X_AXIS_KEY);
 			dynamicPlot.setData(meanFilterOutput[1], PLOT_MEAN_Y_AXIS_KEY);
@@ -1115,12 +1030,12 @@ public class AccelerationFilterActivity extends Activity implements
 	 */
 	private void updateBarPlot()
 	{
-		Number[] seriesNumbers = new Number[4];
+		Number[] seriesNumbers = new Number[3];
 
-		double var = varianceAccel.addSample(Math.sqrt(Math.pow(
-				acceleration[0], 2)
-				+ Math.pow(acceleration[1], 2)
-				+ Math.pow(acceleration[2], 2)));
+		stdDevMaginitudeAccel.addValue(Math.sqrt(Math.pow(acceleration[0], 2)
+				+ Math.pow(acceleration[1], 2) + Math.pow(acceleration[2], 2)));
+
+		double var = stdDevMaginitudeAccel.getStandardDeviation();
 
 		if (var > MAX_NOISE_THRESHOLD)
 		{
@@ -1129,49 +1044,34 @@ public class AccelerationFilterActivity extends Activity implements
 
 		seriesNumbers[BAR_PLOT_ACCEL_KEY] = var;
 
-		if (plotLPFAndDevReady)
+		if (plotLPFReady)
 		{
-			var = varianceLPFAndDev.addSample(Math.sqrt(Math.pow(
-					lpfAndDevOutput[0], 2)
-					+ Math.pow(lpfAndDevOutput[1], 2)
-					+ Math.pow(lpfAndDevOutput[2], 2)));
+			stdDevMaginitude.addValue(Math.sqrt(Math.pow(
+					lpfOutput[0], 2)
+					+ Math.pow(lpfOutput[1], 2)
+					+ Math.pow(lpfOutput[2], 2)));
+
+			var = stdDevMaginitude.getStandardDeviation();
 
 			if (var > MAX_NOISE_THRESHOLD)
 			{
 				var = MAX_NOISE_THRESHOLD;
 			}
 
-			seriesNumbers[BAR_PLOT_LPF_AND_DEV_KEY] = var;
+			seriesNumbers[BAR_PLOT_LPF_KEY] = var;
 		}
-		if (!plotLPFAndDevReady)
+		if (!plotLPFReady)
 		{
-			seriesNumbers[BAR_PLOT_LPF_AND_DEV_KEY] = 0;
+			seriesNumbers[BAR_PLOT_LPF_KEY] = 0;
 		}
-
-		if (plotLPFWikiReady)
-		{
-			var = varianceLPFWiki.addSample(Math.sqrt(Math.pow(
-					lpfWikiOutput[0], 2)
-					+ Math.pow(lpfWikiOutput[1], 2)
-					+ Math.pow(lpfWikiOutput[2], 2)));
-
-			if (var > MAX_NOISE_THRESHOLD)
-			{
-				var = MAX_NOISE_THRESHOLD;
-			}
-
-			seriesNumbers[BAR_PLOT_LPF_WIKI_KEY] = var;
-		}
-		if (!plotLPFWikiReady)
-		{
-			seriesNumbers[BAR_PLOT_LPF_WIKI_KEY] = 0;
-		}
-
+	
 		if (plotMeanReady)
 		{
-			var = varianceMean.addSample(Math.abs(meanFilterOutput[0])
+			stdDevMaginitudeMean.addValue(Math.abs(meanFilterOutput[0])
 					+ Math.abs(meanFilterOutput[1])
 					+ Math.abs(meanFilterOutput[2]));
+
+			var = stdDevMaginitudeMean.getStandardDeviation();
 
 			if (var > MAX_NOISE_THRESHOLD)
 			{

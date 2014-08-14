@@ -6,7 +6,7 @@ import java.util.List;
 
 import android.util.Log;
 
-import com.kircherelectronics.accelerationfilter.AccelerationFilterActivity;
+import com.kircherelectronics.accelerationfilter.activity.AccelerationPlotActivity;
 
 /*
  * Copyright 2013, Kircher Electronics
@@ -33,11 +33,16 @@ import com.kircherelectronics.accelerationfilter.AccelerationFilterActivity;
  */
 public class MeanFilter
 {
-	private static final String tag = MeanFilter.class
-			.getSimpleName();
+	private static final String tag = MeanFilter.class.getSimpleName();
+
+	private float timeConstant = 1;
+	private float startTime = 0;
+	private float timestamp = 0;
+	private float hz = 0;
 	
+	private int count = 0;
 	// The size of the mean filters rolling window.
-	private int filterWindow = AccelerationFilterActivity.getSampleWindow();
+	private int filterWindow = 20;
 
 	private boolean dataInit;
 
@@ -52,6 +57,19 @@ public class MeanFilter
 		dataInit = false;
 	}
 
+	public void setTimeConstant(float timeConstant)
+	{
+		this.timeConstant = timeConstant;
+	}
+	
+	public void reset()
+	{
+		startTime = 0;
+		timestamp = 0;
+		count = 0;
+		hz = 0;
+	}
+	
 	/**
 	 * Filter the data.
 	 * 
@@ -61,6 +79,23 @@ public class MeanFilter
 	 */
 	public float[] filterFloat(float[] data)
 	{
+		// Initialize the start time.
+		if (startTime == 0)
+		{
+			startTime = System.nanoTime();
+		}
+
+		timestamp = System.nanoTime();
+
+		// Find the sample period (between updates) and convert from
+		// nanoseconds to seconds. Note that the sensor delivery rates can
+		// individually vary by a relatively large time frame, so we use an
+		// averaging technique with the number of sensor updates to
+		// determine the delivery rate.
+		hz = (count++ / ((timestamp - startTime) / 1000000000.0f));
+		
+		filterWindow = (int) (hz * timeConstant);
+
 		for (int i = 0; i < data.length; i++)
 		{
 			// Initialize the data structures for the data set.
@@ -115,8 +150,5 @@ public class MeanFilter
 		return m;
 	}
 
-	public void setWindowSize(int size)
-	{
-		this.filterWindow = size;
-	}
+
 }

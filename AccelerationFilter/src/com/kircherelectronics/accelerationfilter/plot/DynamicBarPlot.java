@@ -37,7 +37,6 @@ public class DynamicBarPlot
 
 	private String seriesTitle;
 
-	private int count = 0;
 
 	/**
 	 * Initialize a new DynamicBarPlot.
@@ -86,7 +85,7 @@ public class DynamicBarPlot
 								153, 204)));
 
 		// This needs to be changed with the number of plots, must be >= 1
-		levelsPlot.setDomainStepValue(4);
+		levelsPlot.setDomainStepValue(3);
 
 		levelsPlot.setRangeStep(XYStepMode.INCREMENT_BY_VAL, .02);
 		levelsPlot.setRangeValueFormat(new DecimalFormat("#.###"));
@@ -157,12 +156,9 @@ public class DynamicBarPlot
 				toAppendTo.append("Accel");
 				break;
 			case 1:
-				toAppendTo.append("WLPF");
+				toAppendTo.append("LPF");
 				break;
 			case 2:
-				toAppendTo.append("ADLPF");
-				break;
-			case 3:
 				toAppendTo.append("Mean");
 				break;
 			default:
