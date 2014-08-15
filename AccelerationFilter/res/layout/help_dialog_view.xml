@@ -59,7 +59,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_margin="5dp"
-                android:text="Acceleration Filter is intended to help the user explore different digital filters and parameters on the acceleration sensor. Currently, there are two IIR low-pass filters and one FIR moving average filter."
+                android:text="Acceleration Filter is intended to help the user explore different digital filters and parameters on the acceleration sensor. Currently, there is one IIR (infinite impulse response) low-pass filter and one FIR (finite impulse response) moving average filter. The IIR low-pass filter is defined as: output = alpha * output + (1 - alpha) * input. Alpha is defined as alpha = timeConstant / (timeConstant + dt) where dt is the time between sensor measurements and the time constant is the desired period of time that the samples should be filtered for. The moving average filter is defined as the sum of all the samples in the window divided by the number of samples in the window. The window size is defined by the desired peroid of time the samples should be filtered for multiplied by the ouput frequency of the sensor."
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 
             <TextView

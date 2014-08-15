@@ -58,6 +58,7 @@ public class SettingsDialog extends Dialog
 {
 	private boolean meanFilterActive = false;
 	private boolean lpfActive = false;
+	private boolean invertAxisActive = false;
 
 	private float lpfTimeConstant;
 	private float meanFilterTimeConstant;
@@ -66,6 +67,7 @@ public class SettingsDialog extends Dialog
 
 	private CheckBox checkBoxLpfActive;
 	private CheckBox checkBoxMeanFilterActive;
+	private CheckBox checkBoxInvertAxisActive;
 
 	private DecimalFormat df;
 
@@ -98,7 +100,7 @@ public class SettingsDialog extends Dialog
 
 		LayoutInflater inflater = getLayoutInflater();
 
-		View settingsView = inflater.inflate(R.layout.settings_plot, null,
+		View settingsView = inflater.inflate(R.layout.settings_dialog_view, null,
 				false);
 
 		buttonAccept = (Button) settingsView.findViewById(R.id.button_accept);
@@ -110,6 +112,7 @@ public class SettingsDialog extends Dialog
 			{
 				lpfActive = checkBoxLpfActive.isChecked();
 				meanFilterActive = checkBoxMeanFilterActive.isChecked();
+				invertAxisActive = checkBoxInvertAxisActive.isChecked();
 
 				lpfTimeConstant = Float.valueOf(editTextLpfTimeConstant
 						.getText().toString());
@@ -129,6 +132,8 @@ public class SettingsDialog extends Dialog
 				.findViewById(R.id.check_box_lpf_active);
 		checkBoxMeanFilterActive = (CheckBox) settingsView
 				.findViewById(R.id.check_box_mean_filter_active);
+		checkBoxInvertAxisActive = (CheckBox) settingsView
+				.findViewById(R.id.check_box_invert_axis_active);
 
 		editTextLpfTimeConstant = (EditText) settingsView
 				.findViewById(R.id.edit_text_lpf_time_constant);
@@ -137,6 +142,7 @@ public class SettingsDialog extends Dialog
 
 		checkBoxLpfActive.setChecked(this.lpfActive);
 		checkBoxMeanFilterActive.setChecked(this.meanFilterActive);
+		checkBoxInvertAxisActive.setChecked(this.invertAxisActive);
 
 		editTextLpfTimeConstant.setText(String.valueOf(this.lpfTimeConstant));
 		editTextMeanFilterTimeConsant.setText(String
@@ -164,6 +170,8 @@ public class SettingsDialog extends Dialog
 		this.lpfActive = prefs.getBoolean(PrefUtils.LPF_ACTIVE_PREF, false);
 		this.meanFilterActive = prefs.getBoolean(
 				PrefUtils.MEAN_FILTER_ACTIVE_PREF, false);
+		this.invertAxisActive = prefs.getBoolean(
+				PrefUtils.INVERT_AXIS_ACTIVE, false);
 
 		this.lpfTimeConstant = prefs.getFloat(PrefUtils.LPF_TIME_CONSTANT, 1);
 		this.meanFilterTimeConstant = prefs.getFloat(
@@ -185,6 +193,8 @@ public class SettingsDialog extends Dialog
 		editor.putBoolean(PrefUtils.LPF_ACTIVE_PREF, this.lpfActive);
 		editor.putBoolean(PrefUtils.MEAN_FILTER_ACTIVE_PREF,
 				this.meanFilterActive);
+		editor.putBoolean(PrefUtils.INVERT_AXIS_ACTIVE,
+				this.invertAxisActive);
 
 		editor.putFloat(PrefUtils.LPF_TIME_CONSTANT, this.lpfTimeConstant);
 		editor.putFloat(PrefUtils.MEAN_FILTER_TIME_CONSTANT,

@@ -224,6 +224,33 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="5dp" >
 
+        <TextView
+            android:id="@+id/textView1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentLeft="true"
+            android:layout_alignParentTop="true"
+            android:layout_marginLeft="15dp"
+            android:fontFamily="sans-serif-condensed"
+            android:text="@string/invert_axis_label"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textColor="@color/white" />
+
+        <CheckBox
+            android:id="@+id/check_box_invert_axis_active"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentTop="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginRight="15dp" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp" >
+
         <Button
             android:id="@+id/button_accept"
             android:layout_width="wrap_content"
@@ -231,7 +258,6 @@
             android:layout_alignParentTop="true"
             android:layout_centerHorizontal="true"
             android:text="Accept" />
-
     </RelativeLayout>
 
 </LinearLayout>

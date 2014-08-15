@@ -135,6 +135,8 @@ public class AccelerationPlotActivity extends Activity implements
 
 	// Indicate if the Mean Filter should be plotted
 	private boolean meanFilterActive = false;
+	
+	private boolean invertAxisActive = false;
 
 	private boolean plotLPFReady = false;
 	private boolean plotMeanReady = false;
@@ -341,6 +343,13 @@ public class AccelerationPlotActivity extends Activity implements
 	{
 		// Get a local copy of the sensor values
 		System.arraycopy(event.values, 0, acceleration, 0, event.values.length);
+		
+		if(invertAxisActive)
+		{
+			acceleration[0] = -acceleration[0];
+			acceleration[1] = -acceleration[1];
+			acceleration[2] = -acceleration[2];
+		}
 
 		if (lpfActive)
 		{
@@ -774,7 +783,7 @@ public class AccelerationPlotActivity extends Activity implements
 
 		helpDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help,
+		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help_dialog_view,
 				null));
 
 		helpDialog.show();
@@ -979,6 +988,8 @@ public class AccelerationPlotActivity extends Activity implements
 		this.lpfActive = prefs.getBoolean(PrefUtils.LPF_ACTIVE_PREF, false);
 		this.meanFilterActive = prefs.getBoolean(
 				PrefUtils.MEAN_FILTER_ACTIVE_PREF, false);
+		this.invertAxisActive = prefs.getBoolean(
+				PrefUtils.INVERT_AXIS_ACTIVE, false);
 
 		this.lpfTimeConstant = prefs.getFloat(PrefUtils.LPF_TIME_CONSTANT, 1);
 		this.meanFilterTimeConstant = prefs.getFloat(

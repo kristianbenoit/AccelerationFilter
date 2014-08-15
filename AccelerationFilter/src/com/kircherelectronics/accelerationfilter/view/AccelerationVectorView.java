@@ -1,23 +1,16 @@
 package com.kircherelectronics.accelerationfilter.view;
 
-import android.app.Activity;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.EmbossMaskFilter;
-import android.graphics.LinearGradient;
-import android.graphics.MaskFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Path.FillType;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.hardware.SensorManager;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.TextureView;
 import android.view.View;
 
 /**
@@ -350,9 +343,37 @@ public final class AccelerationVectorView extends View
 
 	private void drawVectorLength(Canvas canvas)
 	{
-		// Draw the Y axis
-		canvas.drawLine(rimRect.centerX(), rimRect.centerY(),
-				rimRect.centerX() - this.x, rimRect.centerY() + this.y, vectorPaint);
+		// Draw the vector.
+		canvas.drawLine(rimRect.centerX(), rimRect.centerY(), rimRect.centerX()
+				- this.x, rimRect.centerY() + this.y, vectorPaint);
+
+		// Use the magnitude of the acceleration to determine the size of the
+		// vectors arrow. We have to scale it up by 250% because we had
+		// initially scaled it down by by 40% and we want to normalize to 1.
+		float magnitude = (float) Math.sqrt(Math.pow(this.x, 2)
+				+ Math.pow(this.y, 2)) * 2.5f;
+
+		// Rotate the canvas so the arrows rotate with the vector. Note we have
+		// to rotate by 90 degrees so 0 degrees is pointing in the positive Y
+		// axis. We also change the rotation from counter clockwise to clockwise
+		// with a negative out front. Also, note the atan2 produces a range from
+		// 0 to 180 degrees and 0 to -180 degrees. I add 360 degrees and then
+		// take mod 360 so the range is 0 to 360 degrees.
+		canvas.rotate(
+				(float) -((Math.toDegrees(Math.atan2(this.y, this.x)) + 450) % 360),
+				rimRect.centerX() - this.x, rimRect.centerY() + this.y);
+
+		// Draw the vector arrows. Note that the length of the arrows are scaled
+		// by the magnitude.
+		canvas.drawLine(rimRect.centerX() - this.x + 0.002f, rimRect.centerY()
+				+ this.y, rimRect.centerX() - this.x - (0.05f * magnitude),
+				rimRect.centerY() + this.y + (0.05f * magnitude), vectorPaint);
+
+		canvas.drawLine(rimRect.centerX() - this.x - 0.002f, rimRect.centerY()
+				+ this.y, rimRect.centerX() - this.x + (0.05f * magnitude),
+				rimRect.centerY() + this.y + (0.05f * magnitude), vectorPaint);
+
+		canvas.restore();
 	}
 
 	private void drawAxisLength(Canvas canvas)
@@ -360,7 +381,7 @@ public final class AccelerationVectorView extends View
 		// Draw the Y axis
 		canvas.drawLine(rimRect.centerX(), rimRect.centerY(),
 				rimRect.centerX(), rimRect.centerY() + this.y, yAxisLengthPaint);
-		
+
 		// Draw the X axis
 		canvas.drawLine(rimRect.centerX(), rimRect.centerY(), rimRect.centerX()
 				- this.x, rimRect.centerY(), xAxisLengthPaint);

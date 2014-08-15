@@ -23,6 +23,12 @@ import com.kircherelectronics.accelerationfilter.plot.PlotPrefCallback;
 import com.kircherelectronics.accelerationfilter.prefs.PrefUtils;
 import com.kircherelectronics.accelerationfilter.view.AccelerationVectorView;
 
+/**
+ * Draws a two dimensional vector of the acceleration sensors measurements.
+ * 
+ * @author Kaleb
+ * 
+ */
 public class AccelerationVectorActivity extends Activity implements
 		SensorEventListener, PlotPrefCallback
 {
@@ -31,6 +37,8 @@ public class AccelerationVectorActivity extends Activity implements
 
 	// Indicate if the Mean Filter should be plotted
 	private boolean meanFilterActive = false;
+	
+	private boolean invertAxisActive = false;
 
 	private float lpfTimeConstant = 1;
 	private float meanFilterTimeConstant = 1;
@@ -81,6 +89,13 @@ public class AccelerationVectorActivity extends Activity implements
 	public void onSensorChanged(SensorEvent event)
 	{
 		System.arraycopy(event.values, 0, acceleration, 0, event.values.length);
+		
+		if(invertAxisActive)
+		{
+			acceleration[0] = -acceleration[0];
+			acceleration[1] = -acceleration[1];
+			acceleration[2] = -acceleration[2];
+		}
 
 		if (lpfActive && !meanFilterActive)
 		{
@@ -196,6 +211,8 @@ public class AccelerationVectorActivity extends Activity implements
 		this.lpfActive = prefs.getBoolean(PrefUtils.LPF_ACTIVE_PREF, false);
 		this.meanFilterActive = prefs.getBoolean(
 				PrefUtils.MEAN_FILTER_ACTIVE_PREF, false);
+		this.invertAxisActive = prefs.getBoolean(
+				PrefUtils.INVERT_AXIS_ACTIVE, false);
 
 		this.lpfTimeConstant = prefs.getFloat(PrefUtils.LPF_TIME_CONSTANT, 1);
 		this.meanFilterTimeConstant = prefs.getFloat(
@@ -210,7 +227,7 @@ public class AccelerationVectorActivity extends Activity implements
 
 		helpDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help,
+		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help_dialog_view,
 				null));
 
 		helpDialog.show();

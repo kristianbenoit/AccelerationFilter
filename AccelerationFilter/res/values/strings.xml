@@ -22,4 +22,6 @@
     <string name="time_constant_label">Time Constant</string>
 	<string name="vector_label">Vector</string>
 	<string name="plot_label">Plot</string>
+	<string name="invert_axis_label">Invert Axis</string>
+	
 </resources>
