@@ -54,7 +54,7 @@ import android.widget.TextView;
  * @author Kaleb
  * @version %I%, %G%
  */
-public class SettingsDialog extends Dialog
+public class FilterSettingsDialog extends Dialog
 {
 	private boolean meanFilterActive = false;
 	private boolean lpfActive = false;
@@ -86,7 +86,7 @@ public class SettingsDialog extends Dialog
 	 * @param lpfAndDev
 	 *            The Android Developer LPF.
 	 */
-	public SettingsDialog(Context context, PlotPrefCallback callback)
+	public FilterSettingsDialog(Context context, PlotPrefCallback callback)
 	{
 		super(context);
 
@@ -122,9 +122,9 @@ public class SettingsDialog extends Dialog
 
 				writePrefs();
 				
-				SettingsDialog.this.callback.checkPlotPrefs();
+				FilterSettingsDialog.this.callback.checkPlotPrefs();
 				
-				SettingsDialog.this.dismiss();
+				FilterSettingsDialog.this.dismiss();
 			}
 		});
 

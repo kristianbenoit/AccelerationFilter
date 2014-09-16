@@ -25,7 +25,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -39,7 +38,8 @@ import android.widget.Toast;
 
 import com.androidplot.xy.XYPlot;
 import com.kircherelectronics.accelerationfilter.R;
-import com.kircherelectronics.accelerationfilter.dialog.SettingsDialog;
+import com.kircherelectronics.accelerationfilter.dialog.FilterSettingsDialog;
+import com.kircherelectronics.accelerationfilter.dialog.SensorSettingsDialog;
 import com.kircherelectronics.accelerationfilter.filter.LowPassFilter;
 import com.kircherelectronics.accelerationfilter.filter.MeanFilter;
 import com.kircherelectronics.accelerationfilter.plot.DynamicBarPlot;
@@ -135,7 +135,7 @@ public class AccelerationPlotActivity extends Activity implements
 
 	// Indicate if the Mean Filter should be plotted
 	private boolean meanFilterActive = false;
-	
+
 	private boolean invertAxisActive = false;
 
 	private boolean plotLPFReady = false;
@@ -205,7 +205,7 @@ public class AccelerationPlotActivity extends Activity implements
 	// Sensor manager to access the accelerometer sensor
 	private SensorManager sensorManager;
 
-	private SettingsDialog settingsDialog;
+	private FilterSettingsDialog settingsDialog;
 
 	// RMS Noise levels
 	private DescriptiveStatistics stdDevMaginitudeAccel;
@@ -213,6 +213,8 @@ public class AccelerationPlotActivity extends Activity implements
 	private DescriptiveStatistics stdDevMaginitudeMean;
 
 	private DescriptiveStatistics stdDevMaginitudeMeanZAxis;
+
+	private SensorSettingsDialog sensorSettingsDialog;
 
 	// Acceleration plot titles
 	private String plotAccelXAxisTitle = "A-X";
@@ -229,6 +231,8 @@ public class AccelerationPlotActivity extends Activity implements
 	private String plotMeanYAxisTitle = "M-Y";
 	private String plotMeanZAxisTitle = "M-Z";
 	private String plotStdDevMeanZAxisTitle = "StdDevMZ";
+
+	private String frequencySelection;
 
 	// Output log
 	private String log;
@@ -310,7 +314,8 @@ public class AccelerationPlotActivity extends Activity implements
 		super.onResume();
 
 		readPrefs();
-		
+		readSensorPrefs();
+
 		// Reset the filters
 		lpf.reset();
 		meanFilter.reset();
@@ -326,10 +331,7 @@ public class AccelerationPlotActivity extends Activity implements
 
 		handler.post(runnable);
 
-		// Register for sensor updates.
-		sensorManager.registerListener(this,
-				sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-				SensorManager.SENSOR_DELAY_FASTEST);
+		updateSensorDelay();
 	}
 
 	@Override
@@ -343,8 +345,8 @@ public class AccelerationPlotActivity extends Activity implements
 	{
 		// Get a local copy of the sensor values
 		System.arraycopy(event.values, 0, acceleration, 0, event.values.length);
-		
-		if(invertAxisActive)
+
+		if (invertAxisActive)
 		{
 			acceleration[0] = -acceleration[0];
 			acceleration[1] = -acceleration[1];
@@ -406,7 +408,11 @@ public class AccelerationPlotActivity extends Activity implements
 
 			// Log the data
 		case R.id.menu_settings_filter:
-			showSettingsDialog();
+			showFilterSettingsDialog();
+			return true;
+
+		case R.id.action_settings_sensor:
+			showSensorSettingsDialog();
 			return true;
 
 			// Log the data
@@ -499,16 +505,32 @@ public class AccelerationPlotActivity extends Activity implements
 
 		Thread.currentThread().interrupt();
 	}
-	
+
 	@Override
 	public void checkPlotPrefs()
 	{
 		readPrefs();
+		readSensorPrefs();
 		checkLPFActive();
 		checkMeanActive();
-		
+
+		updateSensorDelay();
+
 		lpf.setTimeConstant(this.lpfTimeConstant);
 		meanFilter.setTimeConstant(this.meanFilterTimeConstant);
+	}
+
+	/**
+	 * Read in the current user preferences.
+	 */
+	private void readSensorPrefs()
+	{
+		SharedPreferences prefs = this.getSharedPreferences(
+				PrefUtils.SENSOR_PREFS, Activity.MODE_PRIVATE);
+
+		this.frequencySelection = prefs.getString(
+				PrefUtils.SENSOR_FREQUENCY_PREF,
+				PrefUtils.SENSOR_FREQUENCY_FAST);
 	}
 
 	/**
@@ -661,7 +683,7 @@ public class AccelerationPlotActivity extends Activity implements
 	{
 		lpf = new LowPassFilter();
 		lpf.setTimeConstant(this.lpfTimeConstant);
-		
+
 		meanFilter = new MeanFilter();
 		meanFilter.setTimeConstant(this.meanFilterTimeConstant);
 	}
@@ -783,8 +805,8 @@ public class AccelerationPlotActivity extends Activity implements
 
 		helpDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-		helpDialog.setContentView(getLayoutInflater().inflate(R.layout.help_dialog_view,
-				null));
+		helpDialog.setContentView(getLayoutInflater().inflate(
+				R.layout.help_dialog_view, null));
 
 		helpDialog.show();
 	}
@@ -792,11 +814,26 @@ public class AccelerationPlotActivity extends Activity implements
 	/**
 	 * Show a settings dialog.
 	 */
-	private void showSettingsDialog()
+	private void showSensorSettingsDialog()
+	{
+		if (sensorSettingsDialog == null)
+		{
+			sensorSettingsDialog = new SensorSettingsDialog(this, this);
+			sensorSettingsDialog.setCancelable(true);
+			sensorSettingsDialog.setCanceledOnTouchOutside(true);
+		}
+
+		sensorSettingsDialog.show();
+	}
+
+	/**
+	 * Show a settings dialog.
+	 */
+	private void showFilterSettingsDialog()
 	{
 		if (settingsDialog == null)
 		{
-			settingsDialog = new SettingsDialog(this, this);
+			settingsDialog = new FilterSettingsDialog(this, this);
 			settingsDialog.setCancelable(true);
 			settingsDialog.setCanceledOnTouchOutside(true);
 		}
@@ -988,8 +1025,8 @@ public class AccelerationPlotActivity extends Activity implements
 		this.lpfActive = prefs.getBoolean(PrefUtils.LPF_ACTIVE_PREF, false);
 		this.meanFilterActive = prefs.getBoolean(
 				PrefUtils.MEAN_FILTER_ACTIVE_PREF, false);
-		this.invertAxisActive = prefs.getBoolean(
-				PrefUtils.INVERT_AXIS_ACTIVE, false);
+		this.invertAxisActive = prefs.getBoolean(PrefUtils.INVERT_AXIS_ACTIVE,
+				false);
 
 		this.lpfTimeConstant = prefs.getFloat(PrefUtils.LPF_TIME_CONSTANT, 1);
 		this.meanFilterTimeConstant = prefs.getFloat(
@@ -1018,12 +1055,9 @@ public class AccelerationPlotActivity extends Activity implements
 
 		if (lpfActive)
 		{
-			dynamicPlot
-					.setData(lpfOutput[0], PLOT_LPF_X_AXIS_KEY);
-			dynamicPlot
-					.setData(lpfOutput[1], PLOT_LPF_Y_AXIS_KEY);
-			dynamicPlot
-					.setData(lpfOutput[2], PLOT_LPF_Z_AXIS_KEY);
+			dynamicPlot.setData(lpfOutput[0], PLOT_LPF_X_AXIS_KEY);
+			dynamicPlot.setData(lpfOutput[1], PLOT_LPF_Y_AXIS_KEY);
+			dynamicPlot.setData(lpfOutput[2], PLOT_LPF_Z_AXIS_KEY);
 		}
 
 		if (meanFilterActive)
@@ -1057,10 +1091,8 @@ public class AccelerationPlotActivity extends Activity implements
 
 		if (plotLPFReady)
 		{
-			stdDevMaginitude.addValue(Math.sqrt(Math.pow(
-					lpfOutput[0], 2)
-					+ Math.pow(lpfOutput[1], 2)
-					+ Math.pow(lpfOutput[2], 2)));
+			stdDevMaginitude.addValue(Math.sqrt(Math.pow(lpfOutput[0], 2)
+					+ Math.pow(lpfOutput[1], 2) + Math.pow(lpfOutput[2], 2)));
 
 			var = stdDevMaginitude.getStandardDeviation();
 
@@ -1075,7 +1107,7 @@ public class AccelerationPlotActivity extends Activity implements
 		{
 			seriesNumbers[BAR_PLOT_LPF_KEY] = 0;
 		}
-	
+
 		if (plotMeanReady)
 		{
 			stdDevMaginitudeMean.addValue(Math.abs(meanFilterOutput[0])
@@ -1098,5 +1130,74 @@ public class AccelerationPlotActivity extends Activity implements
 		}
 
 		barPlot.onDataAvailable(seriesNumbers);
+	}
+
+	/**
+	 * Set the sensor delay based on user preferences. 0 = slow, 1 = medium, 2 =
+	 * fast.
+	 * 
+	 * @param position
+	 *            The desired sensor delay.
+	 */
+	private void setSensorDelay(int position)
+	{
+		switch (position)
+		{
+		case 0:
+
+			sensorManager.unregisterListener(this,
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
+
+			// Register for sensor updates.
+			sensorManager.registerListener(this,
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+					SensorManager.SENSOR_DELAY_NORMAL);
+			break;
+		case 1:
+
+			sensorManager.unregisterListener(this,
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
+
+			// Register for sensor updates.
+			sensorManager.registerListener(this,
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+					SensorManager.SENSOR_DELAY_GAME);
+			break;
+		case 2:
+
+			sensorManager.unregisterListener(this,
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
+
+			// Register for sensor updates.
+			sensorManager.registerListener(this,
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+					SensorManager.SENSOR_DELAY_FASTEST);
+			break;
+		}
+
+		lpf.reset();
+		meanFilter.reset();
+	}
+
+	/**
+	 * Updates the sensor delay based on the user preference. 0 = slow, 1 =
+	 * medium, 2 = fast.
+	 */
+	private void updateSensorDelay()
+	{
+		if (frequencySelection.equals(PrefUtils.SENSOR_FREQUENCY_SLOW))
+		{
+			setSensorDelay(0);
+		}
+
+		if (frequencySelection.equals(PrefUtils.SENSOR_FREQUENCY_MEDIUM))
+		{
+			setSensorDelay(1);
+		}
+
+		if (frequencySelection.equals(PrefUtils.SENSOR_FREQUENCY_FAST))
+		{
+			setSensorDelay(2);
+		}
 	}
 }

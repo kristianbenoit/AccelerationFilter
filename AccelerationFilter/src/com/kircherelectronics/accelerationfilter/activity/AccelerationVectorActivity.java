@@ -16,7 +16,7 @@ import android.view.MenuItem;
 import android.view.Window;
 
 import com.kircherelectronics.accelerationfilter.R;
-import com.kircherelectronics.accelerationfilter.dialog.SettingsDialog;
+import com.kircherelectronics.accelerationfilter.dialog.FilterSettingsDialog;
 import com.kircherelectronics.accelerationfilter.filter.LowPassFilter;
 import com.kircherelectronics.accelerationfilter.filter.MeanFilter;
 import com.kircherelectronics.accelerationfilter.plot.PlotPrefCallback;
@@ -58,7 +58,7 @@ public class AccelerationVectorActivity extends Activity implements
 	// Sensor manager to access the accelerometer sensor
 	private SensorManager sensorManager;
 
-	private SettingsDialog settingsDialog;
+	private FilterSettingsDialog settingsDialog;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState)
@@ -240,7 +240,7 @@ public class AccelerationVectorActivity extends Activity implements
 	{
 		if (settingsDialog == null)
 		{
-			settingsDialog = new SettingsDialog(this, this);
+			settingsDialog = new FilterSettingsDialog(this, this);
 			settingsDialog.setCancelable(true);
 			settingsDialog.setCanceledOnTouchOutside(true);
 		}

@@ -20,8 +20,16 @@
     <string name="dynamic_alpha">Dynamic Alpha</string>
     <string name="filter_active_label">Filter Active</string>
     <string name="time_constant_label">Time Constant</string>
-	<string name="vector_label">Vector</string>
-	<string name="plot_label">Plot</string>
-	<string name="invert_axis_label">Invert Axis</string>
-	
+    <string name="vector_label">Vector</string>
+    <string name="plot_label">Plot</string>
+    <string name="invert_axis_label">Invert Axis</string>
+    <string name="done_label">Done</string>
+    <string name="frequency_label">Frequency:</string>
+
+    <string-array name="frequency_array">
+        <item>Slow</item>
+        <item>Medium</item>
+        <item>Fast</item>
+    </string-array>
+
 </resources>
